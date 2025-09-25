@@ -19,6 +19,7 @@ type Config struct {
 	LogLevel      string
 	LogFilePath   string
 	DingtalkWebhookURL string
+	DingtalkWebhookSecret string
 }
 
 func Load() Config {
@@ -35,6 +36,7 @@ func Load() Config {
 		LogLevel:      getEnv("LOG_LEVEL", "INFO"),
 		LogFilePath:   getEnv("LOG_FILE_PATH", ""),
 		DingtalkWebhookURL: getEnv("DINGTALK_WEBHOOK_URL", ""),
+		DingtalkWebhookSecret: getEnv("DINGTALK_WEBHOOK_SECRET", ""),
 	}
 }
 

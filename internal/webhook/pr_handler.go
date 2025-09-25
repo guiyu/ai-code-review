@@ -103,12 +103,12 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 			content := fmt.Sprintf("## AI代码审查完成  \n\n**项目**: %s/%s  \n**PR编号**: #%d  \n**PR标题**: %s  \n\n[查看PR](%s/repos/%s/%s/pulls/%d)  ", 
 				owner, repo, prNum, payload.PullRequest.Title, cfg.GiteaBaseURL, owner, repo, prNum)
 			
-			err := dingtalk.SendMarkdownNotification(cfg.DingtalkWebhookURL, title, content)
+			err := dingtalk.SendMarkdownNotification(cfg.DingtalkWebhookURL, cfg.DingtalkWebhookSecret, title, content)
 			if err != nil {
 				logger.Error("Failed to send dingtalk notification: %v", err)
 				// 如果Markdown格式发送失败，尝试发送普通文本通知
 				notificationContent := fmt.Sprintf("AI代码审查完成\n项目: %s/%s\nPR #%d: %s", owner, repo, prNum, payload.PullRequest.Title)
-				err = dingtalk.SendNotification(cfg.DingtalkWebhookURL, notificationContent, []string{})
+				err = dingtalk.SendNotification(cfg.DingtalkWebhookURL, cfg.DingtalkWebhookSecret, notificationContent, []string{})
 				if err != nil {
 					logger.Error("Failed to send dingtalk text notification: %v", err)
 				} else {
