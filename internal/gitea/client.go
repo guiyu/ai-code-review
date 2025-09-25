@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
 	"bucking.cn/code-review/internal/logger"
 )
 
@@ -44,7 +45,6 @@ func (c *Client) PostPRComment(owner, repo string, prNumber int, body string) er
 	return nil
 }
 
-
 // PostCommitComment 在指定 commit 下发表评论
 func (c *Client) PostCommitComment(owner, repo, sha, body string) error {
 	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s/comments",
@@ -71,7 +71,6 @@ func (c *Client) PostCommitComment(owner, repo, sha, body string) error {
 	}
 	return nil
 }
-
 
 // PostIssueComment 在指定 issue 下发表评论
 func (c *Client) PostIssueComment(owner, repo string, issueNumber int, body string) error {
@@ -103,7 +102,7 @@ func (c *Client) PostIssueComment(owner, repo string, issueNumber int, body stri
 // GetPRDiff 获取指定 PR 的真实 diff 内容
 func (c *Client) GetPRDiff(owner, repo string, prNumber int) (string, error) {
 	// 构建 API URL
-	url := fmt.Sprintf("%s/api/v1/repos/%s/%s/pulls/%d.diff", c.BaseURL, owner, repo, prNumber)
+	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d.diff", c.BaseURL, owner, repo, prNumber)
 
 	// 创建请求
 	req, err := http.NewRequest("GET", url, nil)
@@ -137,11 +136,10 @@ func (c *Client) GetPRDiff(owner, repo string, prNumber int) (string, error) {
 	return string(diffBytes), nil
 }
 
-
 // GetCommitDiff 获取指定 commit 的 diff 内容
 func (c *Client) GetCommitDiff(owner, repo, commitID string) (string, error) {
 	// 构建 API URL
-	url := fmt.Sprintf("%s/api/v1/repos/%s/%s/commits/%s.diff", c.BaseURL, owner, repo, commitID)
+	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s.diff", c.BaseURL, owner, repo, commitID)
 
 	// 创建请求
 	req, err := http.NewRequest("GET", url, nil)
