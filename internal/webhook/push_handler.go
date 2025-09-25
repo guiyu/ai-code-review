@@ -65,7 +65,7 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 			// 这里用 commit message 模拟 diff，可改为调用 Gitea Diff API 获取真实 diff
 			diff := fmt.Sprintf("Commit: %s\nMessage: %s", commit.ID, commit.Message)
 
-			review, err := ai.ReviewCode(cfg.AIKey, diff, owner, repo)
+			review, err := ai.ReviewCode(cfg.AIBaseURL, cfg.AIModel, cfg.AIKey, diff)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
