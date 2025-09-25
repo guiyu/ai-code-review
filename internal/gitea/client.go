@@ -103,6 +103,7 @@ func (c *Client) PostIssueComment(owner, repo string, issueNumber int, body stri
 func (c *Client) GetPRDiff(owner, repo string, prNumber int) (string, error) {
 	// 构建 API URL
 	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d.diff", c.BaseURL, owner, repo, prNumber)
+	logger.Debug("GetPRDiff URL: %s", url)
 
 	// 创建请求
 	req, err := http.NewRequest("GET", url, nil)
@@ -140,6 +141,7 @@ func (c *Client) GetPRDiff(owner, repo string, prNumber int) (string, error) {
 func (c *Client) GetCommitDiff(owner, repo, commitID string) (string, error) {
 	// 构建 API URL
 	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s.diff", c.BaseURL, owner, repo, commitID)
+	logger.Debug("GetCommitDiff URL: %s", url)
 
 	// 创建请求
 	req, err := http.NewRequest("GET", url, nil)

@@ -13,10 +13,16 @@ func ReviewCode(aiBaseURL, aiModel, aiKey, diff string) (string, error) {
 	config.BaseURL = aiBaseURL
 	client := openai.NewClientWithConfig(config)
 
+	prompt :=
+	"请审查以下代码diff差异并提供详细的代码审查意见\n" +
+	"针对新增的代码，提供改进意见，包括但不限于代码质量、可读性、性能、安全性等方面，给出你觉得需要改进的代码并显示改进前后的代码差异\n" +
+	"针对删除的代码，提出可能会造成的影响，并提出建议\n" +
+	"最后，综合所有更改做个言简意赅的总结\n"
+
 	req := openai.ChatCompletionRequest{
 		Model: aiModel,
 		Messages: []openai.ChatCompletionMessage{
-			{Role: "system", Content: "你是一个专业的代码审查员。请审查以下Git diff，找出潜在问题并提供改进建议。"},
+			{Role: "system", Content: prompt},
 			{Role: "user", Content: diff},
 		},
 	}
