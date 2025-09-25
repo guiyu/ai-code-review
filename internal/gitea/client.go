@@ -139,7 +139,7 @@ func (c *Client) GetPRDiff(owner, repo string, prNumber int) (string, error) {
 
 func (c *Client) GetCommitDiff(owner, repo, sha string) (string, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/diff/%s", c.BaseURL, owner, repo, sha)
-	fmt.Print("GetCommitDiff URL: %s", url) 
+	print(fmt.Print("GetCommitDiff URL: %s", url))
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
