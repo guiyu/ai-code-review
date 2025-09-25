@@ -69,3 +69,31 @@ func (c *Client) PostCommitComment(owner, repo, sha, body string) error {
 	}
 	return nil
 }
+
+
+// PostIssueComment 在指定 issue 下发表评论
+func (c *Client) PostIssueComment(owner, repo string, issueNumber int, body string) error {
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments",
+		c.BaseURL, owner, repo, issueNumber)
+
+	data := map[string]string{"body": body}
+	b, _ := json.Marshal(data)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "token "+c.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("failed to post issue comment, status: %s", resp.Status)
+	}
+	return nil
+}
