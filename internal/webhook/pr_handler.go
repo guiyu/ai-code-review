@@ -71,6 +71,7 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 		// 调用Gitea API发表评论
 		client := gitea.NewClient(cfg.GiteaBaseURL, cfg.GiteaToken)
 		comment := "🤖 **AI代码审查结果**\n\n" + review
+		println(comment)
 		if err := client.PostPRComment(owner, repo, prNum, comment); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "post comment failed"})
 			return

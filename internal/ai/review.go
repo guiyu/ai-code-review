@@ -25,6 +25,7 @@ func ReviewCode(aiBaseURL, aiModel, aiKey, diff string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	println(resp.Choices[0].Message.Content)
 
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
