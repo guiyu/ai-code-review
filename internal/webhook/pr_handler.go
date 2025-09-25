@@ -13,6 +13,7 @@ import (
 	"bucking.cn/code-review/internal/ai"
 	"bucking.cn/code-review/internal/config"
 	"bucking.cn/code-review/internal/gitea"
+	"bucking.cn/code-review/internal/logger"
 )
 
 type PullRequestPayload struct {
@@ -34,21 +35,25 @@ type PullRequestPayload struct {
 
 func PRHandler(cfg config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		logger.Info("Received PR webhook request")
 		body, _ := io.ReadAll(c.Request.Body)
 
 		signature := c.GetHeader("X-Gitea-Signature")
 		if !validateSignature(body, cfg.WebhookSecret, signature) {
+			logger.Warn("Invalid signature received")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 			return
 		}
 
 		var payload PullRequestPayload
 		if err := json.Unmarshal(body, &payload); err != nil {
+			logger.Error("Failed to unmarshal payload: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
 			return
 		}
 
 		if payload.Action != "opened" && payload.Action != "synchronize" {
+			logger.Info("Ignoring action: %s", payload.Action)
 			c.JSON(http.StatusOK, gin.H{"message": "ignored action"})
 			return
 		}
@@ -57,13 +62,17 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 		repo := payload.PullRequest.Head.Repo.Name
 		prNum := payload.Number
 
+		logger.Info("Processing PR #%d for %s/%s", prNum, owner, repo)
+
 		// 在真实生产中，这里应该调用 Gitea Diff API 获取diff
 		// 这里用PR Body代替示例
 		diff := fmt.Sprintf("PR Title: %s\nPR Body: %s", payload.PullRequest.Title, payload.PullRequest.Body)
 
 		// 调用AI审查
+		logger.Info("Calling AI for code review")
 		review, err := ai.ReviewCode(cfg.AIBaseURL, cfg.AIModel, cfg.AIKey, diff)
 		if err != nil {
+			logger.Error("AI review failed: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -71,12 +80,14 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 		// 调用Gitea API发表评论
 		client := gitea.NewClient(cfg.GiteaBaseURL, cfg.GiteaToken)
 		comment := "🤖 **AI代码审查结果**\n\n" + review
-		println(comment)
+		logger.Debug("Comment content: %s", comment)
 		if err := client.PostPRComment(owner, repo, prNum, comment); err != nil {
+			logger.Error("Failed to post comment to PR: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "post comment failed"})
 			return
 		}
 
+		logger.Info("Successfully posted AI review to PR #%d", prNum)
 		c.JSON(http.StatusOK, gin.H{"message": "AI review posted to PR"})
 	}
 }
