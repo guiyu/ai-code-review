@@ -7,11 +7,14 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-func ReviewCode(aiKey, diff string) (string, error) {
-	client := openai.NewClient(aiKey)
+func ReviewCode(aiBaseURL, aiModel, aiKey, diff string) (string, error) {
+	// client := openai.NewClient(aiKey)
+	config := openai.DefaultConfig(aiKey)
+	config.BaseURL = aiBaseURL
+	client := openai.NewClientWithConfig(config)
 
 	req := openai.ChatCompletionRequest{
-		Model: "gpt-4o-mini",
+		Model: aiModel,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: "system", Content: "你是一个专业的代码审查员。请审查以下Git diff，找出潜在问题并提供改进建议。"},
 			{Role: "user", Content: diff},

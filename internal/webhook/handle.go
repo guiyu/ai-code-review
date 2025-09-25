@@ -50,7 +50,7 @@ func Handler(cfg config.Config) gin.HandlerFunc {
 		diff := fmt.Sprintf("Repository: %s\nRef: %s\nCommits: %v",
 			payload.Repository.Name, payload.Ref, payload.Commits)
 
-		review, err := ai.ReviewCode(cfg.AIKey, diff)
+		review, err := ai.ReviewCode(cfg.AIBaseURL, cfg.AIModel, cfg.AIKey, diff)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
