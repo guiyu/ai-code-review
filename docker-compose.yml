@@ -6,6 +6,4 @@ services:
     volumes:
       - ./log:/app/log
       - .env:/app/.env
-    depends_on:
-      - gitea
     restart: unless-stopped
