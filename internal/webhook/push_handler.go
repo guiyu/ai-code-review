@@ -59,6 +59,7 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 			return
 		}
 
+		logger.Info("Repository: %s", payload.Repository)
 		owner := payload.Repository.Owner.Name
 		repo := payload.Repository.Name
 		logger.Info("Processing push event for %s/%s with %d commits", owner, repo, len(payload.Commits))
