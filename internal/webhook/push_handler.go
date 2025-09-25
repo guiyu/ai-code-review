@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"fmt"
 
 	"bucking.cn/code-review/internal/ai"
 	"bucking.cn/code-review/internal/config"
 	"bucking.cn/code-review/internal/gitea"
 	"bucking.cn/code-review/internal/logger"
 	"github.com/gin-gonic/gin"
+	"bucking.cn/code-review/internal/dingtalk"
 )
 
 // Gitea Push Webhook Payload
@@ -98,6 +100,15 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 				return
 			}
 			logger.Info("Successfully posted AI review to commit: %s", commit.ID)
+
+			// 发送钉钉通知
+			if cfg.DingtalkWebhookURL != "" {
+				// title := fmt.Sprintf("AI代码审查完成 - Commit %s", commit.ID[:7])
+				content := fmt.Sprintf("## AI代码审查完成  \n\n**项目**: %s/%s  \n**Commit**: %s  \n\n%s  ", owner, repo, commit.ID[:7], comment)
+				if err := dingtalk.SendNotification(cfg.DingtalkWebhookURL, content, []string{"13800138000"}); err != nil {
+					logger.Error("Failed to send dingtalk message: %v", err)
+				}
+			}
 		}
 
 		logger.Info("Successfully processed push event for %s/%s", owner, repo)
