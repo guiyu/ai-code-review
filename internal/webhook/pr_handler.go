@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -66,7 +65,15 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 
 		// 在真实生产中，这里应该调用 Gitea Diff API 获取diff
 		// 这里用PR Body代替示例
-		diff := fmt.Sprintf("PR Title: %s\nPR Body: %s", payload.PullRequest.Title, payload.PullRequest.Body)
+		// diff := fmt.Sprintf("PR Title: %s\nPR Body: %s", payload.PullRequest.Title, payload.PullRequest.Body)
+		client := gitea.NewClient(cfg.GiteaBaseURL, cfg.GiteaToken)
+
+		diff, err := client.GetPRDiff(owner, repo, prNum)
+		if err != nil {
+			logger.Error("Failed to get PR diff: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "get pr diff failed"})
+			return
+		}
 
 		// 调用AI审查
 		logger.Info("Calling AI for code review")
@@ -78,7 +85,6 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 		}
 
 		// 调用Gitea API发表评论
-		client := gitea.NewClient(cfg.GiteaBaseURL, cfg.GiteaToken)
 		comment := "🤖 **AI代码审查结果**\n\n" + review
 		logger.Debug("Comment content: %s", comment)
 		if err := client.PostPRComment(owner, repo, prNum, comment); err != nil {
