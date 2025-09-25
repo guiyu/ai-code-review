@@ -5,7 +5,6 @@ import (
 	// "crypto/sha256"
 	// "encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -63,9 +62,14 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 
 		for _, commit := range payload.Commits {
 			// 这里用 commit message 模拟 diff，可改为调用 Gitea Diff API 获取真实 diff
-			diff := fmt.Sprintf("Commit: %s\nMessage: %s", commit.ID, commit.Message)
+			// diff := fmt.Sprintf("Commit: %s\nMessage: %s", commit.ID, commit.Message)
+			diff, err := client.GetCommitDiff(owner, repo, commit.ID)
+			if err != nil || diff == "" {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "get commit diff failed"})
+				return
+			}
 
-			review, err := ai.ReviewCode(cfg.AIKey, diff, owner, repo)
+			review, err := ai.ReviewCode(cfg.AIBaseURL, cfg.AIModel, cfg.AIKey, diff)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
