@@ -5,18 +5,18 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"bucking.cn/code-review/internal/ai"
 	"bucking.cn/code-review/internal/config"
 	"bucking.cn/code-review/internal/gitea"
 	"bucking.cn/code-review/internal/logger"
+	"github.com/gin-gonic/gin"
 )
 
 // Gitea Push Webhook Payload
 type PushPayload struct {
 	Ref        string `json:"ref"`
 	Repository struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
 		Owner struct {
 			Name string `json:"name"`
 		} `json:"owner"`
@@ -62,20 +62,20 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 		owner := payload.Repository.Owner.Name
 		repo := payload.Repository.Name
 		logger.Info("Processing push event for %s/%s with %d commits", owner, repo, len(payload.Commits))
-		
+
 		client := gitea.NewClient(cfg.GiteaBaseURL, cfg.GiteaToken)
 
 		for _, commit := range payload.Commits {
 			logger.Info("Processing commit: %s", commit.ID)
+			print(owner, repo, commit.ID)
 			// 获取commit diff
-			logger.Debug("Fetching diff for commit: %s, %s, %s ", owner, repo, commit.ID)
 			diff, err := client.GetCommitDiff(owner, repo, commit.ID)
 			if err != nil {
 				logger.Error("Failed to get commit diff for %s: %v", commit.ID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "get commit diff failed"})
 				return
 			}
-			
+
 			if diff == "" {
 				logger.Warn("Empty diff for commit: %s", commit.ID)
 				continue
