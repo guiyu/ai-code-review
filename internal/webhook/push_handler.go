@@ -18,7 +18,7 @@ type PushPayload struct {
 	Repository struct {
 		Name  string `json:"name"`
 		Owner struct {
-			Name string `json:"name"`
+			Username string `json:"username"`
 		} `json:"owner"`
 	} `json:"repository"`
 	Commits []struct {
@@ -59,8 +59,7 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 			return
 		}
 
-		logger.Info("Repository: %s", payload.Repository)
-		owner := payload.Repository.Owner.Name
+		owner := payload.Repository.Owner.Username
 		repo := payload.Repository.Name
 		logger.Info("Processing push event for %s/%s with %d commits", owner, repo, len(payload.Commits))
 
