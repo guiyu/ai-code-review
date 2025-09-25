@@ -108,7 +108,7 @@ func PRHandler(cfg config.Config) gin.HandlerFunc {
 				logger.Error("Failed to send dingtalk notification: %v", err)
 				// 如果Markdown格式发送失败，尝试发送普通文本通知
 				notificationContent := fmt.Sprintf("AI代码审查完成\n项目: %s/%s\nPR #%d: %s", owner, repo, prNum, payload.PullRequest.Title)
-				err = dingtalk.SendNotification(cfg.DingtalkWebhookURL, cfg.DingtalkWebhookSecret, notificationContent, []string{})
+				err = dingtalk.SendMarkdownNotification(cfg.DingtalkWebhookURL, cfg.DingtalkWebhookSecret, title, notificationContent )
 				if err != nil {
 					logger.Error("Failed to send dingtalk text notification: %v", err)
 				} else {

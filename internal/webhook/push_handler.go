@@ -103,9 +103,9 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 
 			// 发送钉钉通知
 			if cfg.DingtalkWebhookURL != "" {
-				// title := fmt.Sprintf("AI代码审查完成 - Commit %s", commit.ID[:7])
+				title := fmt.Sprintf("AI代码审查完成 - Commit %s", commit.ID[:7])
 				content := fmt.Sprintf("## AI代码审查完成  \n\n**项目**: %s/%s  \n**Commit**: %s  \n\n%s  ", owner, repo, commit.ID[:7], comment)
-				if err := dingtalk.SendNotification(cfg.DingtalkWebhookURL, cfg.DingtalkWebhookSecret, content, []string{"13800138000"}); err != nil {
+				if err := dingtalk.SendMarkdownNotification(cfg.DingtalkWebhookURL, cfg.DingtalkWebhookSecret, title, content); err != nil {
 					logger.Error("Failed to send dingtalk message: %v", err)
 				}
 			}
