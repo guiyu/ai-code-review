@@ -68,6 +68,7 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 		for _, commit := range payload.Commits {
 			logger.Info("Processing commit: %s", commit.ID)
 			// 获取commit diff
+			logger.Debug("Fetching diff for commit: %s, %s, %s ", owner, repo, commit.ID)
 			diff, err := client.GetCommitDiff(owner, repo, commit.ID)
 			if err != nil {
 				logger.Error("Failed to get commit diff for %s: %v", commit.ID, err)
