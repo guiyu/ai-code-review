@@ -9,6 +9,3 @@ services:
     depends_on:
       - gitea
     restart: unless-stopped
-
-volumes:
-  gitea-data:

@@ -32,7 +32,7 @@ WORKDIR /app
 COPY --from=builder /app/code-review .
 
 # 复制配置文件示例
-COPY --from=builder /app/.env.example .env
+# COPY --from=builder /app/.env.example .env
 
 # 创建日志目录并设置权限
 RUN mkdir -p log && chown -R appuser:appuser log
@@ -41,7 +41,7 @@ RUN mkdir -p log && chown -R appuser:appuser log
 USER appuser
 
 # 暴露端口
-EXPOSE 8080
+EXPOSE 8008
 
 # 运行应用
 CMD ["./code-review"]
