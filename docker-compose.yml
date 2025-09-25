@@ -1,36 +1,13 @@
-version: '3.8'
-
 services:
   code-review:
     build: .
     ports:
-      - "8080:8080"
-    environment:
-      - PORT=8080
-      - MODE=release
-      - AI_BASE_URL=https://api.deepseek.com
-      - AI_MODEL=deepseek-chat
-      - GITEA_BASE_URL=http://gitea:3000/api/v1
+      - "8008:8080"
     volumes:
       - ./log:/app/log
       - .env:/app/.env
     depends_on:
       - gitea
-    restart: unless-stopped
-
-  gitea:
-    image: gitea/gitea:1.22
-    ports:
-      - "3000:3000"
-      - "2222:22"
-    volumes:
-      - gitea-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    environment:
-      - APP_NAME=Gitea
-      - RUN_MODE=prod
-      - DOMAIN=localhost
     restart: unless-stopped
 
 volumes:
