@@ -136,43 +136,32 @@ func (c *Client) GetPRDiff(owner, repo string, prNumber int) (string, error) {
 
 	return string(diffBytes), nil
 }
+func (c *Client) GetCommitDiff(owner, repo, sha string) (string, error) {
+	url := fmt.Sprintf("%s/api/v1/repos/%s/%s/diff/%s", c.BaseURL, owner, repo, sha)
 
-// GetCommitDiff 获取指定 commit 的 diff 内容
-func (c *Client) GetCommitDiff(owner, repo, commitID string) (string, error) {
-	// 构建 API URL
-	url := fmt.Sprintf("%s/repos/%s/%s/commits/%s.diff", c.BaseURL, owner, repo, commitID)
-	logger.Debug("GetCommitDiff URL: %s", url)
-
-	// 创建请求
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	// 设置认证 header
 	req.Header.Set("Authorization", "token "+c.Token)
-	req.Header.Set("Accept", "application/vnd.gitea.v1.diff") // 可选，确保返回 diff
+	req.Header.Set("Accept", "application/vnd.gitea.v1.diff") // 可选
 
-	// 发起请求
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 检查状态码
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("请求失败，状态码: %d, 返回: %s", resp.StatusCode, string(body))
+		b, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("请求失败，状态码 %d，返回 %s", resp.StatusCode, string(b))
 	}
 
-	// 读取 diff
-	diffBytes, err := io.ReadAll(resp.Body)
+	diff, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("读取响应失败: %w", err)
 	}
 
-	logger.Debug("Diff: %s", string(diffBytes))
-
-	return string(diffBytes), nil
+	return string(diff), nil
 }
