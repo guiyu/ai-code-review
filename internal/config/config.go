@@ -18,6 +18,7 @@ type Config struct {
 	GiteaBaseURL  string
 	LogLevel      string
 	LogFilePath   string
+	DingtalkWebhookURL string
 }
 
 func Load() Config {
@@ -33,6 +34,7 @@ func Load() Config {
 		GiteaBaseURL:  getEnv("GITEA_BASE_URL", "http://localhost:3000/api/v1"),
 		LogLevel:      getEnv("LOG_LEVEL", "INFO"),
 		LogFilePath:   getEnv("LOG_FILE_PATH", ""),
+		DingtalkWebhookURL: getEnv("DINGTALK_WEBHOOK_URL", ""),
 	}
 }
 

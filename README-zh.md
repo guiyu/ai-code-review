@@ -1,8 +1,6 @@
-# Code Review Bot
+# 代码审查机器人
 
-An AI-powered code review bot that automatically reviews Pull Requests and Push events in Gitea.
-
-[中文文档](README-zh.md)
+一个基于AI的代码审查机器人，可自动审查Gitea中的Pull Request和Push事件。
 
 ## 功能特性
 
