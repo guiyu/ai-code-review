@@ -1,14 +1,21 @@
 # 使用官方Go镜像作为构建环境
 FROM golang:1.24-alpine AS builder
-
+ENV GO111MODULE=on 
+ENV CGO_ENABLED=0 
+ENV GOOS=linux 
+ENV GOPROXY=https://goproxy.cn,direct 
+ENV GOARCH=amd64
 # 设置工作目录
 WORKDIR /app
+
+# 设置阿里云镜像源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # 复制go mod和sum文件
 COPY go.mod go.sum ./
 
 # 下载依赖
-RUN go mod download
+RUN go mod tidy
 
 # 复制源代码
 COPY . .
