@@ -93,13 +93,13 @@ func PushHandler(cfg config.Config) gin.HandlerFunc {
 
 			// 发表评论
 			comment := "🤖 **AI代码审查结果**\n\n" + review
-			logger.Debug("Comment content for commit %s: %s", commit.ID, comment)
-			if err := client.PostCommitComment(owner, repo, commit.ID, comment); err != nil {
-				logger.Error("Failed to post comment to commit %s: %v", commit.ID, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "post commit comment failed"})
-				return
-			}
-			logger.Info("Successfully posted AI review to commit: %s", commit.ID)
+			// logger.Debug("Comment content for commit %s: %s", commit.ID, comment)
+			// if err := client.PostCommitComment(owner, repo, commit.ID, comment); err != nil {
+			// 	logger.Error("Failed to post comment to commit %s: %v", commit.ID, err)
+			// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "post commit comment failed"})
+			// 	return
+			// }
+			// logger.Info("Successfully posted AI review to commit: %s", commit.ID)
 
 			// 发送钉钉通知
 			if cfg.DingtalkWebhookURL != "" {
