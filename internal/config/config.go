@@ -13,6 +13,8 @@ type Config struct {
 	AIModel       string
 	AIKey         string
 	WebhookSecret string
+	GiteaToken    string
+	GiteaBaseURL  string
 }
 
 func Load() Config {
@@ -23,6 +25,8 @@ func Load() Config {
 		AIModel:       getEnv("AI_MODEL", "deepseek-chat"),
 		AIKey:         getEnv("AI_API_KEY", ""),
 		WebhookSecret: getEnv("WEBHOOK_SECRET", ""),
+		GiteaToken:    getEnv("GITEA_TOKEN", ""),
+		GiteaBaseURL:  getEnv("GITEA_BASE_URL", "http://localhost:3000/api/v1"),
 	}
 }
 
