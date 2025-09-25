@@ -166,13 +166,13 @@ func (c *Client) GetCommitDiff(owner, repo, commitID string) (string, error) {
 		return "", fmt.Errorf("请求失败，状态码: %d, 返回: %s", resp.StatusCode, string(body))
 	}
 
-	logger.Debug("Diff: %s", resp.Body)
-
 	// 读取 diff
 	diffBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("读取响应失败: %w", err)
 	}
+
+	logger.Debug("Diff: %s", string(diffBytes))
 
 	return string(diffBytes), nil
 }

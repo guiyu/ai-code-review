@@ -1,12 +1,34 @@
 # Code Review Bot
 
-一个基于AI的代码审查机器人，可以自动审查Gitea中的Pull Request。
+An AI-powered code review bot that automatically reviews Pull Requests and Push events in Gitea.
+
+[中文文档](README-zh.md)
 
 ## 功能特性
 
 - 自动监听Gitea的Pull Request事件
+- 自动监听Gitea的Push事件
 - 使用AI对代码变更进行智能审查
-- 在PR中自动添加审查评论
+- 在PR和Commit中自动添加审查评论
+- 支持多种AI模型（DeepSeek、OpenAI等）
+- 可配置的日志系统
+- Webhook签名验证确保安全性
+
+## 项目架构
+
+```
+code-review/
+├── cmd/
+│   └── server/          # 服务入口
+│       └── main.go
+├── internal/
+│   ├── ai/              # AI代码审查逻辑
+│   ├── config/          # 配置管理
+│   ├── gitea/           # Gitea API客户端
+│   ├── logger/          # 日志模块
+│   └── webhook/         # Webhook处理
+└── log/                 # 日志文件目录
+```
 
 ## 快速开始
 
@@ -48,6 +70,27 @@ cp .env.example .env
 go run cmd/server/main.go
 ```
 
+或者编译后运行：
+
+```bash
+go build -o code-review cmd/server/main.go
+./code-review
+```
+
+## Webhook配置
+
+在Gitea中配置Webhook：
+
+1. 进入仓库设置 -> Webhooks
+2. 添加Webhook
+3. 设置URL为: `http://your-domain:port/webhook/pr` (PR事件)
+4. 设置URL为: `http://your-domain:port/webhook/push` (Push事件)
+5. 内容类型选择: `application/json`
+6. 密钥填写与`.env`中`WEBHOOK_SECRET`相同的值
+7. 选择触发事件:
+   - 对于PR Webhook: 选择"Pull Request"
+   - 对于Push Webhook: 选择"Push Events"
+
 ## 日志模块
 
 本项目包含一个内置的日志模块，支持以下特性：
@@ -71,6 +114,18 @@ logger.Info("一般信息: %s", info)
 logger.Warn("警告信息: %s", warning)
 logger.Error("错误信息: %v", err)
 ```
+
+## 支持的AI模型
+
+本项目支持任何兼容OpenAI API的模型，包括：
+
+- DeepSeek (默认配置)
+- OpenAI GPT系列
+- 阿里通义千问
+- 百度文心一言
+- 腾讯混元
+
+只需在`.env`文件中配置相应的`AI_BASE_URL`和`AI_MODEL`即可。
 
 ## 许可证
 
