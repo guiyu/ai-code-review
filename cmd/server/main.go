@@ -41,6 +41,8 @@ func main() {
 
 	// Pull Request Webhook
 	r.POST("/webhook/pr", webhook.PRHandler(cfg))
+	r.POST("/webhook/push", webhook.PushHandler(cfg))
+
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	logger.Info("🚀 Server running on %s", addr)
