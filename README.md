@@ -1,8 +1,6 @@
-# Code Review Bot
+# 代码审查机器人
 
-An AI-powered code review bot that automatically reviews Pull Requests and Push events in Gitea.
-
-[中文文档](README-zh.md)
+一个基于AI的代码审查机器人，可自动审查Gitea中的Pull Request和Push事件。
 
 ## 功能特性
 
@@ -130,9 +128,7 @@ logger.Error("错误信息: %v", err)
 
 只需在`.env`文件中配置相应的`AI_BASE_URL`和`AI_MODEL`即可。
 
-## 钉钉通知功能
-
-### 钉钉通知功能
+##### 钉钉通知功能
 
 本项目支持在PR代码审查完成后发送钉钉通知。要启用此功能，请执行以下步骤：
 
