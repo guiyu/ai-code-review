@@ -1,6 +1,23 @@
 # Feishu bot notifications
 
-The review controller uses an **enterprise self-built application bot**, with its own app ID and secret, to send a private message to the PR author. A group custom webhook bot cannot implement this app-authenticated, `open_id` direct-message flow. Polling identifies the PR author; it does not establish who pushed the latest commit. Accurate pusher notifications require trusted push events and additional identity mapping.
+In `feishu_dm` mode (the default), the review controller uses an **enterprise self-built application bot**, with its own app ID and secret, to send a private message to the PR author. A group custom webhook bot cannot implement this app-authenticated, `open_id` direct-message flow. Polling identifies the PR author; it does not establish who pushed the latest commit. Accurate pusher notifications require trusted push events and additional identity mapping.
+
+## 群评审结果通知（当前部署方式）
+
+在私有配置中设置：
+
+```json
+{
+  "notification_mode": "feishu_group",
+  "feishu_webhook_url_env": "FEISHU_WEBHOOK_URL"
+}
+```
+
+将群自定义机器人的完整 Webhook URL 放入 `FEISHU_WEBHOOK_URL` 环境变量；本机部署由 `.runtime/environment.json` 加载。机器人安全设置的自定义关键词为 `codereview`，客户端会自动加到每条消息开头。无需飞书应用 App ID/Secret、通讯录权限或个人身份映射。当前实现支持关键词验证，未实现机器人签名验证。
+
+控制器在 Gitea 评审报告与状态发布后发送结果摘要、问题统计及报告链接。仅发送评审结果，不转发普通 Issue/PR 评论。服务所在内网需要能出站访问 Gitea 和 `open.feishu.cn:443`，不需要公网回调入口或 Gitea Webhook。
+
+发送失败留在持久化 outbox，后续轮询重试；已确认成功的结果不重复发送。群机器人没有私信 API 的 UUID 去重能力，网络超时或发送成功后本地保存失败可能产生重复消息。保存的 `group-accepted:...` 是本地确认标记，不是飞书消息 ID。切换通知模式不会补发此前已经成功通知的结果。通知失败不会撤销已通过的评审门禁。
 
 ## Application setup and identity
 

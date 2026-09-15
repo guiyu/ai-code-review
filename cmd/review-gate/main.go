@@ -67,8 +67,13 @@ func run() error {
 	defer store.Close()
 	c := &gate.Controller{Config: cfg, API: api, Store: store, Reviewer: gate.SubprocessReviewer{Config: cfg}}
 	id, secret := os.Getenv(cfg.FeishuAppIDEnv), os.Getenv(cfg.FeishuAppSecretEnv)
-	if id != "" && secret != "" {
+	if cfg.NotificationMode == "feishu_dm" && id != "" && secret != "" {
 		c.Notifier = feishu.NewClient(id, secret)
+	}
+	if cfg.NotificationMode == "feishu_group" {
+		if webhook := os.Getenv(cfg.FeishuWebhookURLEnv); webhook != "" {
+			c.Notifier = feishu.NewGroupClient(webhook)
+		}
 	}
 	switch args[0] {
 	case "once":

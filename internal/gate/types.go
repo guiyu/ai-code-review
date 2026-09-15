@@ -20,6 +20,8 @@ import (
 const StatusContext = "hermes-review"
 
 type Config struct {
+	FeishuWebhookURLEnv  string            `json:"feishu_webhook_url_env"`
+	NotificationMode     string            `json:"notification_mode"`
 	GiteaURL             string            `json:"gitea_url"`
 	Repository           string            `json:"repository"`
 	BaseBranch           string            `json:"base_branch"`
@@ -40,7 +42,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "1", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
+	return Config{FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "1", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
 }
 func LoadConfig(path string) (Config, error) {
 	c := DefaultConfig()
@@ -59,6 +61,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if len(strings.Split(c.Repository, "/")) != 2 || strings.Contains(c.Repository, "..") || c.BaseBranch == "" || c.BotUsername == "" || c.StateDir == "" || c.PolicyVersion == "" || rank[c.BlockThreshold] == 0 || c.PollSeconds < 1 || c.ReviewTimeoutSeconds < 1 || c.MaxDiffBytes < 1 {
 		return c, errors.New("invalid controller configuration")
+	}
+	if c.NotificationMode != "feishu_dm" && c.NotificationMode != "feishu_group" {
+		return c, errors.New("invalid notification_mode: use feishu_dm or feishu_group")
 	}
 	return c, nil
 }
