@@ -80,3 +80,5 @@ launchctl print gui/$(id -u)/com.halliday.hermes-review-gate-oasis
 群客户端现支持 `FEISHU_WEBHOOK_KEYWORD`，默认值仍为 `codereview`。本机两个实例共享环境配置，设为准确值 `1. codereview`；无需修改飞书机器人设置。此前的失败记录是修复前的历史状态。
 
 修复后验收：两个 launchd 服务均运行正常；原队列中的 2 份 PR #1 报告（3264、3265）均收到飞书成功确认，Notified=true、NotifyError 为空、待发送数为 0。Oasis 仓库当前无待发送报告。
+
+通知更新：两个实例均已切换到用户后续提供的新 Webhook（仅保存在私有配置中），连接测试返回 code=0；关键词沿用 `1. codereview`。新增 PR 提交人 Gitea 用户名与数字 ID，位于报告正文前，长消息截断仍保留。两个服务已重启并确认为 running；既有已发送报告未重发。相关 Go 回归测试及静态检查通过。
