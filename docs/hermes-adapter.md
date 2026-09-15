@@ -1,4 +1,4 @@
-> 最新策略 `oasis-static-v4`：保留三节短报告，summary 通常 300–500 字；增加逻辑边界、内存资源、状态并发、接口兼容、安全和修改完整性六类必检项。缺陷详情仅在 findings 中展示，合并重复问题且保留全部阻断问题。仍不做编译、构建或真机分析。
+> 最新策略 `oasis-static-v5`：保留六类静态必检项，summary 压缩到 150–250 字且不复述问题细节；待确认项最多 3 条。所有 P0/P1 保留，P2/P3/提示合并后最多 5 条；单条标题、证据、建议分别限制为 30/150/80 字。模型输出预算仍为 8192 token，避免通过降低生成上限制造新的截断。
 
 > 根据全部 commit log 和完整 diff 推断修改目标；未提供关联仓库或编译结果不自动阻断，仅与改动判断直接相关的关键代码证据缺失时使用“证据不足”。已证实 P0/P1、无效报告、证据未读完仍禁止合入。只读工具、精确源码行号校验和飞书通知保留。Oasis 输出预算调整为 8192 token，评审超时上限暂保留，以免把缩短报告误实现为截断报告。
 
@@ -67,16 +67,16 @@ Inspected installed Hermes commit: `7c9d05267c550dd6b0db2bdcdecda9d06a73baea` (2
 Run the self-contained boundary suite with any Python 3.9+ interpreter:
 
 ```sh
-python3 -m unittest discover -s scripts -p test_hermes_reviewer.py
+python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 Run the optional real installed-Hermes integration using its Python interpreter (the test opens a localhost mock OpenAI server and uses dummy credentials only):
 
 ```sh
-TEST_HERMES_SOURCE=/opt/hermes /opt/hermes/venv/bin/python -m unittest discover -s scripts -p test_hermes_reviewer.py
+TEST_HERMES_SOURCE=/opt/hermes /opt/hermes/venv/bin/python -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-Verification on 2026-09-15: all 19 tests passed with installed Hermes, including an actual streamed model tool-call loop against the localhost mock. The default suite passed 18 boundary tests and skipped that opt-in integration. Tests cover isolated environment/working directory, only the evidence tool being advertised, dispatch refusal, strict JSON, secret diagnostic suppression, input/output size bounds, configuration limits and deadline, exception diagnostic suppression, malformed/truncated diffs (including an incomplete trailing file), valid multiple-file diffs, completeness, unread evidence, invalid findings and completion truncation. The mock integration observed `read_diff`, its supplied diff result, and a valid final JSON response.
+Verification on 2026-09-15: the current full suite contains 41 tests. With installed Hermes configured, all 41 pass, including an actual streamed model tool-call loop against the localhost mock; without that opt-in configuration, 40 pass and the integration test is skipped. Tests cover isolation, tool restrictions, strict JSON, length/count boundaries, secret suppression, input/diff validation, evidence coverage, findings, verdict consistency and completion truncation. The mock integration observed `read_diff`, its supplied diff result, and a valid final JSON response.
 
 An authorized live smoke also passed against the configured private model API using only an artificial six-line diff: adapter exit 0, valid JSON, `complete:true`, zero findings, diff-only scope present and empty stderr. Credentials were loaded from existing local Hermes configuration into dedicated child configuration without printing them. No real repository content, Gitea writes or Feishu messages were involved. This verifies basic private-model compatibility, not model review quality.
 
@@ -88,7 +88,7 @@ Controller 分页收集 PR 全部提交 SHA 和完整消息，获取失败、重
 
 模型返回“修改概述 / 代码问题 / 待确认项”三个中文正文章节；适配器验证章节顺序及中文内容，再确定性生成总标题、评审结论、最高已证实风险等级和最终合入建议。P0/P1/P2/P3 分别对应 critical/high/medium/low。有条件通过保持阻断，需补齐指定代码证据后重新评审。
 
-提示词与适配器均是部署文件，必须一起安装；调整提示词时同步升级 `policy_version`，旧结论不会作为新策略下的合入凭据。当前默认策略为 `oasis-static-v4`。修改 PR 说明本身不自动触发重新评审；需新提交或升级策略版本。
+提示词与适配器均是部署文件，必须一起安装；调整提示词时同步升级 `policy_version`，旧结论不会作为新策略下的合入凭据。当前默认策略为 `oasis-static-v5`。修改 PR 说明本身不自动触发重新评审；需新提交或升级策略版本。
 
 ## 安全失败诊断
 
@@ -96,7 +96,7 @@ Controller 分页收集 PR 全部提交 SHA 和完整消息，获取失败、重
 
 超时有两层：适配器由 `REVIEW_TIMEOUT_SECONDS` 控制，默认 240 秒；控制器由 `review_timeout_seconds` 控制，默认 300 秒。提高适配器期限时必须在 `reviewer_env` 映射该变量，并让外层期限留有余量；只修改控制器期限不能消除适配器的 240 秒终止。
 
-Oasis 生产实例现显式配置 1200 秒适配器期限、1260 秒控制器期限、16384 输出 token。此为上限，不代表每次执行耗时；其他未映射这些环境变量的实例仍用适配器默认值。曾发生任一消息 length/content_filter 截断的结果仍拒绝放行，不因最终补写文本而忽略中间截断。
+Oasis 生产实例现显式配置 1200 秒适配器期限、1260 秒控制器期限、8192 输出 token。`oasis-v1` 故障诊断期间曾临时提高到 16384；v5 通过压缩报告恢复为 8192，同时保留生成余量。此为上限，不代表每次执行耗时；其他未映射这些环境变量的实例仍用适配器默认值。曾发生任一消息 length/content_filter 截断的结果仍拒绝放行，不因最终补写文本而忽略中间截断。
 
 
 模型调用通过 Hermes 的 `request_overrides` 设置 `response_format: {"type":"json_object"}`。部署模型端点必须支持该参数；本机端点已用独立小请求验证 HTTP 200 和合法 JSON。适配器仍严格解析单一 JSON，不截取前言后的对象、不修补重复字段，也不忽略尾随内容。
