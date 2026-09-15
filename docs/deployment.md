@@ -48,3 +48,9 @@
 单实例 state 目录加锁，禁止多个 poller/merge 进程同时修改同一状态。需要运行一次管理命令时先停止常驻服务，操作完成后恢复。不要直接编辑状态文件制造“通过”结果。
 
 备份 state、规则和身份映射；备份文件包含代码评审内容，需要访问控制。修改规则后升级 policy_version 触发重新评审。模型超时、无效输出、超出 diff 大小限制均保持阻断。告警关注日志中的身份映射缺失、API 失败、长时间无成功轮询与模型失败。
+
+## 多仓库实例
+
+每个仓库/目标分支运行一个独立进程，共享二进制和可信 Prompt，分别配置 `repository`、`base_branch`、`state_dir`。不要让两个进程使用同一状态目录。`examples/review-gate-oasis.json` 为 `qingyun/oasis_glasses → dev_oasis` 的无密钥配置示例；复制、配置并分别执行 protect/preflight 后，用独立服务启动。
+
+本机新增实例通过已有私有启动器覆盖配置路径：`python3 .runtime/run.py -config .runtime/config-oasis.json run`。它保留原测试仓库的常驻进程。现有用户级 launchd 服务依赖当前 Mac 在线和用户登录，未改为服务器系统级部署。
