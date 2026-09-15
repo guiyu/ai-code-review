@@ -72,7 +72,11 @@ func run() error {
 	}
 	if cfg.NotificationMode == "feishu_group" {
 		if webhook := os.Getenv(cfg.FeishuWebhookURLEnv); webhook != "" {
-			c.Notifier = feishu.NewGroupClient(webhook)
+			group := feishu.NewGroupClient(webhook)
+			if keyword := os.Getenv(cfg.FeishuWebhookKeywordEnv); keyword != "" {
+				group.Keyword = keyword
+			}
+			c.Notifier = group
 		}
 	}
 	switch args[0] {

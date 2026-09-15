@@ -20,29 +20,30 @@ import (
 const StatusContext = "hermes-review"
 
 type Config struct {
-	FeishuWebhookURLEnv  string            `json:"feishu_webhook_url_env"`
-	NotificationMode     string            `json:"notification_mode"`
-	GiteaURL             string            `json:"gitea_url"`
-	Repository           string            `json:"repository"`
-	BaseBranch           string            `json:"base_branch"`
-	TokenEnv             string            `json:"token_env"`
-	BotUsername          string            `json:"bot_username"`
-	StateDir             string            `json:"state_dir"`
-	PolicyVersion        string            `json:"policy_version"`
-	BlockThreshold       string            `json:"block_threshold"`
-	ReviewerCommand      []string          `json:"reviewer_command"`
-	ReviewerEnv          map[string]string `json:"reviewer_env"`
-	Identities           map[string]string `json:"identities"`
-	FeishuAppIDEnv       string            `json:"feishu_app_id_env"`
-	FeishuAppSecretEnv   string            `json:"feishu_app_secret_env"`
-	PollSeconds          int               `json:"poll_seconds"`
-	ReviewTimeoutSeconds int               `json:"review_timeout_seconds"`
-	MaxDiffBytes         int64             `json:"max_diff_bytes"`
-	AllowInsecureHTTP    bool              `json:"allow_insecure_http"`
+	FeishuWebhookKeywordEnv string            `json:"feishu_webhook_keyword_env"`
+	FeishuWebhookURLEnv     string            `json:"feishu_webhook_url_env"`
+	NotificationMode        string            `json:"notification_mode"`
+	GiteaURL                string            `json:"gitea_url"`
+	Repository              string            `json:"repository"`
+	BaseBranch              string            `json:"base_branch"`
+	TokenEnv                string            `json:"token_env"`
+	BotUsername             string            `json:"bot_username"`
+	StateDir                string            `json:"state_dir"`
+	PolicyVersion           string            `json:"policy_version"`
+	BlockThreshold          string            `json:"block_threshold"`
+	ReviewerCommand         []string          `json:"reviewer_command"`
+	ReviewerEnv             map[string]string `json:"reviewer_env"`
+	Identities              map[string]string `json:"identities"`
+	FeishuAppIDEnv          string            `json:"feishu_app_id_env"`
+	FeishuAppSecretEnv      string            `json:"feishu_app_secret_env"`
+	PollSeconds             int               `json:"poll_seconds"`
+	ReviewTimeoutSeconds    int               `json:"review_timeout_seconds"`
+	MaxDiffBytes            int64             `json:"max_diff_bytes"`
+	AllowInsecureHTTP       bool              `json:"allow_insecure_http"`
 }
 
 func DefaultConfig() Config {
-	return Config{FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-v1", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
+	return Config{FeishuWebhookKeywordEnv: "FEISHU_WEBHOOK_KEYWORD", FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-v1", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
 }
 func LoadConfig(path string) (Config, error) {
 	c := DefaultConfig()

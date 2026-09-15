@@ -13,7 +13,7 @@ In `feishu_dm` mode (the default), the review controller uses an **enterprise se
 }
 ```
 
-将群自定义机器人的完整 Webhook URL 放入 `FEISHU_WEBHOOK_URL` 环境变量；本机部署由 `.runtime/environment.json` 加载。机器人安全设置的自定义关键词为 `codereview`，客户端会自动加到每条消息开头。无需飞书应用 App ID/Secret、通讯录权限或个人身份映射。当前实现支持关键词验证，未实现机器人签名验证。
+将群自定义机器人的完整 Webhook URL 放入 `FEISHU_WEBHOOK_URL` 环境变量；本机部署由 `.runtime/environment.json` 加载。默认关键词为 `codereview`，客户端会自动加到每条消息开头。可通过 `FEISHU_WEBHOOK_KEYWORD` 环境变量覆盖，或用配置项 `feishu_webhook_keyword_env` 指定环境变量名。关键词按原样发送，必须与飞书安全设置一致，包括空格、标点和编号。本机截图确认实际关键词为 `1. codereview`，已经按此配置。无需飞书应用 App ID/Secret、通讯录权限或个人身份映射。当前实现支持关键词验证，未实现机器人签名验证。
 
 控制器在 Gitea 评审报告与状态发布后发送结果摘要、问题统计及报告链接。仅发送评审结果，不转发普通 Issue/PR 评论。服务所在内网需要能出站访问 Gitea 和 `open.feishu.cn:443`，不需要公网回调入口或 Gitea Webhook。
 

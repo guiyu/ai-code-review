@@ -72,3 +72,11 @@ launchctl print gui/$(id -u)/com.halliday.hermes-review-gate-oasis
 ```
 
 对该仓库运行 `once`、`retry` 或 `merge` 前，先停止新增实例以释放 `.runtime/state-oasis` 的锁；随后使用 `-config .runtime/config-oasis.json` 指向该仓库，操作后恢复该实例。不要误停原测试仓库的服务。
+
+## 飞书关键词故障定位与修复
+
+截图确认机器人输入框内实际关键词为 `1. codereview`，左侧编辑器行号之外的 `1.` 也是关键词内容。此前客户端仅发送 `codereview`，所以飞书返回 `19024 / Key Words Not Found`。使用完整关键词发送诊断消息，飞书返回 `code:0`、`StatusCode:0`，验证该差异就是失败原因。
+
+群客户端现支持 `FEISHU_WEBHOOK_KEYWORD`，默认值仍为 `codereview`。本机两个实例共享环境配置，设为准确值 `1. codereview`；无需修改飞书机器人设置。此前的失败记录是修复前的历史状态。
+
+修复后验收：两个 launchd 服务均运行正常；原队列中的 2 份 PR #1 报告（3264、3265）均收到飞书成功确认，Notified=true、NotifyError 为空、待发送数为 0。Oasis 仓库当前无待发送报告。
