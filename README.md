@@ -50,7 +50,7 @@ cp examples/review-gate.json review-gate.json
 ```sh
 go test -race ./...
 go vet ./...
-python3 -m unittest discover -s scripts -p 'test_hermes_reviewer.py'
+python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 详见各组件验证记录。单元测试通过不代表目标 Gitea 已配置，也不代表飞书已向真人送达。

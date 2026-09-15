@@ -82,3 +82,30 @@ class OasisPolicyTests(unittest.TestCase):
  def test_heading_notes_do_not_replace_analysis(self):
   with self.assertRaises(adapter.ReviewError):
    self.validate(verdict='通过',summary='\n\n'.join('## '+name+'（待确认）' for name in SECTIONS))
+
+ def test_oversized_summary_is_rejected_before_publication(self):
+  at_limit=SUMMARY+'中'*(500-len(SUMMARY))
+  self.assertEqual(len(at_limit),500)
+  self.validate(summary=at_limit)
+  with self.assertRaises(adapter.ReviewError):
+   self.validate(summary=at_limit+'中')
+
+ def test_oversized_finding_fields_are_rejected(self):
+  base=dict(severity='high',file='a.py',line=1,title='赋值问题',evidence='赋值可能产生错误结果',suggestion='检查赋值逻辑')
+  for field, limit in {'title':30,'evidence':150,'suggestion':80}.items():
+   self.validate(verdict='不通过',findings=[dict(base,**{field:'中'*limit})])
+   with self.subTest(field=field), self.assertRaises(adapter.ReviewError):
+    self.validate(verdict='不通过',findings=[dict(base,**{field:'中'*(limit+1)})])
+
+ def test_more_than_five_nonblocking_findings_are_rejected(self):
+  findings=[dict(severity='medium',file='a.py',line=1,title='问题'+str(i),
+                 evidence='赋值存在需要处理的问题',suggestion='调整并检查赋值') for i in range(6)]
+  self.validate(verdict='不通过',findings=findings[:5])
+  with self.assertRaises(adapter.ReviewError):
+   self.validate(verdict='不通过',findings=findings)
+
+ def test_blocking_findings_are_not_limited_to_five(self):
+  findings=[dict(severity='high',file='a.py',line=1,title='阻断问题'+str(i),
+                 evidence='赋值存在明确的阻断风险',suggestion='修复赋值问题') for i in range(6)]
+  result=self.validate(verdict='不通过',findings=findings)
+  self.assertEqual(len(result['findings']),6)

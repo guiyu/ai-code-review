@@ -13,6 +13,9 @@ from urllib.parse import urlsplit
 
 MAX_INPUT = 524288
 MAX_OUTPUT = 131072
+MAX_SUMMARY_CHARS = 500
+MAX_NONBLOCKING_FINDINGS = 5
+FINDING_TEXT_LIMITS = {'file': 4096, 'title': 30, 'evidence': 150, 'suggestion': 80}
 SCOPE = '证据范围：仅对本次 PR 差异及提供的上下文做静态分析；通过仅代表该范围的静态评审通过。'
 
 
@@ -215,7 +218,7 @@ summary 依次包含三个二级标题，每节有中文正文：
 ## 代码问题
 ## 待确认项
 总标题、结论和合入建议由控制器生成。complete 表示可用证据评审已完成，证据不足也返回 true 和对应 verdict。
-findings 仅列已证实问题；file/line 必须在 allowed_finding_lines 内，line 是源码行号而非 read_diff 全局索引。未知位置的推测只放待确认项。P0/P1/P2/P3 对应 critical/high/medium/low；存在 P0/P1 不得通过。所有说明用中文。
+findings 仅列已证实问题；file/line 必须在 allowed_finding_lines 内，line 是源码行号而非 read_diff 全局索引。未知位置的推测只放待确认项。P0/P1/P2/P3 对应 critical/high/medium/low；存在 P0/P1 不得通过。所有 P0/P1 必须保留；medium/low/info 合并同类后合计最多 5 条。title 不超过 30 字，evidence 不超过 150 字，suggestion 不超过 80 字。所有说明用中文。
 """
 
 
@@ -323,7 +326,7 @@ def validate_output(result, evidence, locations):
     output = decode(raw)
     if not isinstance(output, dict) or set(output) != {'complete', 'verdict', 'summary', 'findings'} or output['complete'] is not True:
         raise ReviewError('invalid review schema')
-    if not isinstance(output['summary'], str) or not output['summary'].strip() or len(output['summary']) > 12000:
+    if not isinstance(output['summary'], str) or not output['summary'].strip() or len(output['summary']) > MAX_SUMMARY_CHARS:
         raise ReviewError('invalid summary')
     if output['verdict'] not in RECOMMENDATIONS:
         raise ReviewError('invalid verdict')
@@ -339,7 +342,7 @@ def validate_output(result, evidence, locations):
         if finding['severity'] not in ('critical', 'high', 'medium', 'low', 'info'):
             raise ReviewError('invalid severity')
         for key in ('file', 'title', 'evidence', 'suggestion'):
-            if not isinstance(finding[key], str) or not finding[key].strip() or len(finding[key]) > 12000:
+            if not isinstance(finding[key], str) or not finding[key].strip() or len(finding[key]) > FINDING_TEXT_LIMITS[key]:
                 raise ReviewError('invalid finding text')
         if any(not re.search(r'[\u4e00-\u9fff]', finding[key]) for key in ('title', 'evidence', 'suggestion')):
             raise ReviewError('finding analysis must use Chinese')
@@ -347,6 +350,8 @@ def validate_output(result, evidence, locations):
             raise ReviewError('finding outside supplied diff')
     ordered = sorted(output['findings'], key=lambda f: list(PRIORITIES).index(f['severity']))
     output['findings'] = ordered
+    if sum(f['severity'] in ('medium', 'low', 'info') for f in ordered) > MAX_NONBLOCKING_FINDINGS:
+        raise ReviewError('too many nonblocking findings')
     if output['verdict'] == '通过' and any(f['severity'] in ('critical', 'high') for f in ordered):
         raise ReviewError('passing verdict contradicts blocking findings')
     risk = PRIORITIES[ordered[0]['severity']] if ordered else '未发现已证实缺陷；未验证风险见正文'
@@ -416,6 +421,8 @@ def main():
                 'finding outside supplied diff': 'OUTPUT_LOCATION',
                 'invalid summary': 'OUTPUT_SUMMARY',
                 'invalid finding schema': 'OUTPUT_FINDING_SCHEMA',
+                'invalid finding text': 'OUTPUT_FINDING_SCHEMA',
+                'too many nonblocking findings': 'OUTPUT_FINDING_SCHEMA',
                 'finding analysis must use Chinese': 'OUTPUT_LANGUAGE',
                 'report section must contain Chinese analysis': 'OUTPUT_LANGUAGE',
                 'incomplete diff coverage': 'EVIDENCE_INCOMPLETE',
