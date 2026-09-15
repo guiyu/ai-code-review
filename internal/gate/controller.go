@@ -195,6 +195,9 @@ func (c *Controller) report(r *Run) string {
 }
 func (c *Controller) notify(ctx context.Context, r *Run) error {
 	recipient := r.Recipient
+	if c.Config.NotificationMode == "feishu_group" {
+		recipient = "feishu_group"
+	}
 	if recipient == "" {
 		recipient = c.Config.Identities[strconv.FormatInt(r.PR.User.ID, 10)]
 		r.Recipient = recipient
