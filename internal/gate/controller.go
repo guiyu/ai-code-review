@@ -128,7 +128,7 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 			res, e = DecodeResult(data)
 		}
 		if e != nil {
-			r.ReviewError = "评审执行失败，禁止合入；请检查证据输入或模型运行状态。"
+			r.ReviewError = reviewFailureMessage(e)
 			r.NextAttemptUnix = time.Now().Add(time.Duration(30*(1<<r.Attempts)) * time.Second).Unix()
 		} else {
 			r.Result = &res

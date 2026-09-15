@@ -78,3 +78,20 @@ func TestShortCommitPageIsNotLastPage(t *testing.T) {
 		t.Fatal(len(commits), calls, e)
 	}
 }
+
+func TestSubprocessPreservesSafeTimeoutReason(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ReviewerCommand = []string{"/bin/sh", "-c", `printf '{"complete":false,"error_code":"REVIEW_TIMEOUT","summary":"SECRET DO NOT LOG"}'; exit 1`}
+	_, err := (SubprocessReviewer{cfg}).Review(context.Background(), ReviewInput{})
+	if err == nil || !strings.Contains(err.Error(), "REVIEW_TIMEOUT") || strings.Contains(err.Error(), "SECRET") {
+		t.Fatal("safe timeout reason lost", err)
+	}
+}
+func TestSubprocessDoesNotTrustArbitraryErrorText(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ReviewerCommand = []string{"/bin/sh", "-c", `printf '{"complete":false,"error_code":"SECRET DO NOT LOG"}'; exit 1`}
+	_, err := (SubprocessReviewer{cfg}).Review(context.Background(), ReviewInput{})
+	if err == nil || strings.Contains(err.Error(), "SECRET") {
+		t.Fatal("untrusted error exposed", err)
+	}
+}
