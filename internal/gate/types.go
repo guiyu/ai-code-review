@@ -42,7 +42,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "1", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
+	return Config{FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-v1", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
 }
 func LoadConfig(path string) (Config, error) {
 	c := DefaultConfig()
@@ -80,6 +80,7 @@ type PR struct {
 	Number    int    `json:"number"`
 	State     string `json:"state"`
 	Title     string `json:"title"`
+	Body      string `json:"body"`
 	Head      Ref    `json:"head"`
 	Base      Ref    `json:"base"`
 	User      User   `json:"user"`
@@ -88,13 +89,22 @@ type PR struct {
 	Mergeable bool   `json:"mergeable"`
 	MergeBase string `json:"merge_base"`
 }
+type ReviewCommit struct {
+	SHA     string `json:"sha"`
+	Message string `json:"message"`
+}
 type ReviewInput struct {
-	Repository string `json:"repository"`
-	Number     int    `json:"number"`
-	HeadSHA    string `json:"head_sha"`
-	BaseSHA    string `json:"base_sha"`
-	Diff       string `json:"diff"`
-	Title      string `json:"title"`
+	Description string         `json:"description"`
+	HeadRef     string         `json:"head_ref"`
+	BaseRef     string         `json:"base_ref"`
+	MergeBase   string         `json:"merge_base"`
+	Commits     []ReviewCommit `json:"commits"`
+	Repository  string         `json:"repository"`
+	Number      int            `json:"number"`
+	HeadSHA     string         `json:"head_sha"`
+	BaseSHA     string         `json:"base_sha"`
+	Diff        string         `json:"diff"`
+	Title       string         `json:"title"`
 }
 type Finding struct {
 	Severity   string `json:"severity"`
@@ -105,6 +115,7 @@ type Finding struct {
 	Suggestion string `json:"suggestion"`
 }
 type Result struct {
+	Verdict  string    `json:"verdict"`
 	Complete bool      `json:"complete"`
 	Summary  string    `json:"summary"`
 	Findings []Finding `json:"findings"`
@@ -122,7 +133,7 @@ func DecodeResult(b []byte) (Result, error) {
 	if d.Decode(new(any)) != io.EOF {
 		return r, errors.New("extra reviewer output")
 	}
-	if !r.Complete || strings.TrimSpace(r.Summary) == "" || r.Findings == nil {
+	if !validVerdict(r.Verdict) || !r.Complete || strings.TrimSpace(r.Summary) == "" || r.Findings == nil {
 		return r, errors.New("incomplete review")
 	}
 	for _, f := range r.Findings {
@@ -132,8 +143,11 @@ func DecodeResult(b []byte) (Result, error) {
 	}
 	return r, nil
 }
+func validVerdict(v string) bool {
+	return v == "通过" || v == "有条件通过" || v == "不通过" || v == "证据不足"
+}
 func (r Result) Passes(threshold string) bool {
-	if !r.Complete || rank[threshold] == 0 {
+	if r.Verdict != "通过" || !r.Complete || rank[threshold] == 0 {
 		return false
 	}
 	for _, f := range r.Findings {
