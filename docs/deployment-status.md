@@ -54,3 +54,21 @@ launchctl bootstrap gui/$(id -u) .runtime/com.halliday.hermes-review-gate.plist
 验证：26 项 Python 测试（含真实已安装 Hermes 对本机模拟模型）、Go gate/feishu 测试与竞态检查、相关 Go 静态检查通过。未执行 Oasis 固件构建或真机测试。
 
 实际新策略验收：PR #1、head `00ba73befdbac61ee58415f6ec8e764052d25674`，`hermes-review` 为 success，`verdict=通过`，报告已发布到 `http://120.26.178.131:3000/qianshou/Gitea_code_review/pulls/1#issuecomment-3265`。评审明确基于提交日志和 README 差异推断修改目标；跨仓/真机证据限制已列出。飞书通知仍失败并等待重试，未执行合并。
+
+## 新增生产仓库：qingyun/oasis_glasses
+
+- 仓库 ID 4，默认目标分支 `dev_oasis`。当前接入面向此分支的 PR；其他目标分支未接入此实例。
+- 已核验 qianshou 管理员权限，应用并读回严格 `hermes-review` 门禁：禁直接/强制推送、仅服务账号合入、阻止过期基线和管理员绕过；保留既有 1 名人工审批及原审核人白名单。
+- 原有 `oasis_pvt*`、`oasis_dvt*`、`oasis_nps*` 规则不在本次变更范围。
+- 独立本机配置 `.runtime/config-oasis.json`，状态 `.runtime/state-oasis`，日志 `.runtime/oasis-service.log`，launchd 服务 `com.halliday.hermes-review-gate-oasis`。共享同一版本评审程序、Oasis Prompt、内网模型和飞书群通知配置。
+- 原测试仓库实例继续运行。两实例状态目录独立，均每 30 秒轮询并随当前用户登录自启动。
+- 已通过 preflight 和首次空 PR 轮询；接入时无开放 PR，尚无此仓库的实际 PR 评审验收。飞书既有发送故障仍需修复，不影响 Gitea 报告发布。
+
+只读检查新增实例：
+
+```sh
+python3 .runtime/run.py -config .runtime/config-oasis.json preflight
+launchctl print gui/$(id -u)/com.halliday.hermes-review-gate-oasis
+```
+
+对该仓库运行 `once`、`retry` 或 `merge` 前，先停止新增实例以释放 `.runtime/state-oasis` 的锁；随后使用 `-config .runtime/config-oasis.json` 指向该仓库，操作后恢复该实例。不要误停原测试仓库的服务。
