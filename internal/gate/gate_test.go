@@ -555,3 +555,23 @@ func TestOutboxRetriesDuringPullListOutage(t *testing.T) {
 		t.Fatal("outbox was not drained", nt.calls, r.Notified)
 	}
 }
+
+func TestReviewOnlyCannotMerge(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.BotUsername = "bot"
+	cfg.ReviewOnly = true
+	cfg.MergeWhitelistUsernames = []string{"bot", "halliday", "qingye"}
+	users := cfg.MergeUsers()
+	if contains(users, "bot") || len(users) != 2 {
+		t.Fatal(users)
+	}
+	c := &Controller{Config: cfg}
+	// No API is configured: the guard must reject before any network operation.
+	if err := c.Merge(context.Background(), 588, strings.Repeat("a", 40)); err == nil {
+		t.Fatal("review-only controller can merge")
+	}
+	cfg.MergeWhitelistUsernames = nil
+	if len(cfg.MergeUsers()) != 0 {
+		t.Fatal("bot was reintroduced")
+	}
+}

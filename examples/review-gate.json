@@ -24,5 +24,7 @@
   },
   "identities": {},
   "feishu_app_id_env": "FEISHU_APP_ID",
-  "feishu_app_secret_env": "FEISHU_APP_SECRET"
+  "feishu_app_secret_env": "FEISHU_APP_SECRET",
+  "review_only": true,
+  "merge_whitelist_usernames": []
 }
