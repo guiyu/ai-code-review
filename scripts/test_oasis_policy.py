@@ -46,3 +46,24 @@ class OasisPolicyTests(unittest.TestCase):
  def test_english_finding_details_rejected(self):
   with self.assertRaises(adapter.ReviewError):
    self.validate(verdict='不通过',findings=[dict(severity='high',file='a.py',line=1,title='Issue',evidence='x = 2',suggestion='Fix')])
+
+ def test_model_supplied_final_advice_is_canonicalized(self):
+  result=self.validate(summary=SUMMARY+'\n\n## 最终合入建议\n拒绝合入：缺少必要源码证据。')
+  self.assertEqual(result['summary'].count('## 最终合入建议'),1)
+ def test_model_supplied_full_report_is_canonicalized(self):
+  result=self.validate(summary='# Oasis 嵌入式代码评审报告\n\n## 评审结论\n证据不足，最高风险待确认。\n\n'+SUMMARY+'\n\n## 最终合入建议\n拒绝合入')
+  self.assertEqual(result['summary'].count('# Oasis 嵌入式代码评审报告'),1)
+  self.assertEqual(result['summary'].count('## 评审结论'),1)
+ def test_conflicting_extra_advice_is_rejected(self):
+  with self.assertRaises(adapter.ReviewError):
+   self.validate(summary=SUMMARY+'\n\n## 最终合入建议\n可以合入')
+
+ def test_model_deferred_advice_can_be_rendered_when_blocked(self):
+  result=self.validate(summary=SUMMARY+'\n\n## 最终合入建议\n由控制器依据 verdict=证据不足 与 findings 确定，缺少跨仓证据。')
+  self.assertTrue(result['summary'].endswith('## 最终合入建议\n拒绝合入'))
+
+ def test_negated_or_conditional_passing_sections_rejected(self):
+  for heading, body in [('最终合入建议','不可以合入'), ('最终合入建议','目前不能合入，补齐验证之后才可以合入'), ('评审结论','不能通过')]:
+   with self.subTest(body=body), self.assertRaises(adapter.ReviewError):
+    summary = ('## '+heading+'\n'+body+'\n\n'+SUMMARY if heading == '评审结论' else SUMMARY+'\n\n## '+heading+'\n'+body)
+    self.validate(verdict='通过', summary=summary)

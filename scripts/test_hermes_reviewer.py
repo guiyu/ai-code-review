@@ -25,6 +25,7 @@ class AIAgent:
   assert kw['skip_memory'] and kw['skip_context_files']
   assert not kw['load_soul_identity'] and not kw['save_trajectories']
   assert kw['max_tokens'] == 8192
+  assert kw['request_overrides'] == {'response_format': {'type': 'json_object'}}
   assert kw['api_key'] == 'test-key' and kw['model'] == 'test-model'
   self.tools = []
   self.valid_tool_names = set()
@@ -120,6 +121,29 @@ class AdapterTests(unittest.TestCase):
   self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_TRUNCATED')
 
 
+ def test_prose_and_trailing_json_fail_with_specific_code(self):
+  for raw in ['Review follows: '+json.dumps(GOOD), json.dumps(GOOD)+',"findings":[]']:
+   with self.subTest(raw=raw):
+    p=self.run_adapter({'completed':True,'final_response':raw})
+    self.assertNotEqual(p.returncode,0)
+    self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_JSON_SYNTAX')
+
+ def test_section_failure_has_specific_code(self):
+  p=self.run_adapter({'completed':True,'final_response':json.dumps(dict(GOOD,summary='中文报告缺少章节'))})
+  self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_SECTIONS')
+
+ def test_opt_in_diagnostics_exclude_credentials(self):
+  with tempfile.TemporaryDirectory() as td:
+   p=self.run_adapter(extra={'REVIEW_DIAGNOSTICS_DIR':td})
+   self.assertEqual(p.returncode,0)
+   files=list(Path(td).glob('*.json'))
+   self.assertEqual(len(files),1)
+   raw=files[0].read_text()
+   self.assertNotIn('test-key',raw)
+   self.assertNotIn('base_url',raw)
+   self.assertIn('final_response',json.loads(raw))
+   self.assertEqual(files[0].stat().st_mode & 0o777,0o600)
+
 
 
 @unittest.skipUnless(os.environ.get('TEST_HERMES_SOURCE'), 'set TEST_HERMES_SOURCE for installed Hermes integration')
@@ -158,6 +182,7 @@ class InstalledHermesTests(unittest.TestCase):
    self.assertEqual(p.stderr, '')
    self.assertGreaterEqual(len(requests), 2)
    for request in requests:
+    self.assertEqual(request.get('response_format'), {'type': 'json_object'})
     self.assertEqual([t['function']['name'] for t in request.get('tools', [])], ['read_diff'])
    evidence = [m['content'] for request in requests for m in request['messages'] if m.get('role') == 'tool']
    self.assertTrue(any('+x = 2' in str(content) for content in evidence))
