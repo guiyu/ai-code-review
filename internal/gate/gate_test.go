@@ -237,6 +237,7 @@ func TestStaleDuringDiffNeverReviews(t *testing.T) {
 func TestProtectionPreservesChecksAndRejectsBypass(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.BotUsername = "bot"
+	cfg.MergeWhitelistUsernames = []string{"halliday", "qingye", "bot", "halliday"}
 	api := NewAPI(cfg, "")
 	old := map[string]any{"status_check_contexts": []any{"ci"}, "required_approvals": float64(2), "enable_push": true, "merge_whitelist_teams": []any{"maintainers"}}
 	p := api.ProtectionPlan(old)
@@ -255,6 +256,19 @@ func TestProtectionPreservesChecksAndRejectsBypass(t *testing.T) {
 	if e := api.AuditProtection(context.Background()); e != nil {
 		t.Fatal(e)
 	}
+	p["merge_whitelist_usernames"] = []string{"qingye", "bot", "halliday"}
+	if e := api.AuditProtection(context.Background()); e != nil {
+		t.Fatal(e)
+	}
+	p["merge_whitelist_usernames"] = []string{"bot", "halliday", "qingye", "stranger"}
+	if api.AuditProtection(context.Background()) == nil {
+		t.Fatal("unconfigured merger accepted")
+	}
+	p["merge_whitelist_usernames"] = []string{"bot", "halliday"}
+	if api.AuditProtection(context.Background()) == nil {
+		t.Fatal("missing configured merger accepted")
+	}
+	p["merge_whitelist_usernames"] = cfg.MergeUsers()
 	p["merge_whitelist_teams"] = []string{"admins"}
 	if api.AuditProtection(context.Background()) == nil {
 		t.Fatal("team bypass")
