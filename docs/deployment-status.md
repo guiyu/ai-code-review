@@ -1,3 +1,5 @@
+> 权限更新：评审实例启用 `review_only`，qianshou 从受管分支合并白名单移除，本地 merge 命令在发起 API 请求前拒绝。Oasis 分支仅保留 halliday、qingye；检查状态、报告和通知继续由 qianshou 发布。
+
 > 合并权限更新：`qingyun/oasis_glasses` 的 `dev_oasis` 合并白名单增加 `halliday`、`qingye`，保留 `qianshou`；人工审批、hermes-review、过期分支阻断和禁止直接推送保持原值。本地配置 `merge_whitelist_usernames` 指定额外合并人员，控制器始终保留自身账号并核对完整名单。
 
 > 最新策略 `oasis-static-v3`：提示词进一步压缩，三节正文各一句、总计目标 150 字；缺陷详情仅在 findings 中展示，合并重复问题且保留全部阻断问题。其余静态分析范围与门禁规则沿用 v2。

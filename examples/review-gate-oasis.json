@@ -28,5 +28,10 @@
   "feishu_app_id_env": "FEISHU_APP_ID",
   "feishu_app_secret_env": "FEISHU_APP_SECRET",
   "notification_mode": "feishu_group",
-  "feishu_webhook_url_env": "FEISHU_WEBHOOK_URL"
+  "feishu_webhook_url_env": "FEISHU_WEBHOOK_URL",
+  "review_only": true,
+  "merge_whitelist_usernames": [
+    "halliday",
+    "qingye"
+  ]
 }

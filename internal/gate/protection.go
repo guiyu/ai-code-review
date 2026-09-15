@@ -39,11 +39,14 @@ func contains(v []string, s string) bool {
 	return false
 }
 
-// MergeUsers always retains the controller and only adds explicitly configured users.
+// Review-only controllers must never be members of the merge allowlist.
 func (c Config) MergeUsers() []string {
-	users := []string{c.BotUsername}
+	users := []string{}
+	if !c.ReviewOnly {
+		users = append(users, c.BotUsername)
+	}
 	for _, user := range c.MergeWhitelistUsernames {
-		if user != "" && !contains(users, user) {
+		if user != "" && !(c.ReviewOnly && user == c.BotUsername) && !contains(users, user) {
 			users = append(users, user)
 		}
 	}
@@ -111,7 +114,7 @@ func (a *API) AuditProtection(ctx context.Context) error {
 	if v, _ := p["unprotected_file_patterns"].(string); v != "" {
 		return errors.New("unprotected file patterns bypass gate")
 	}
-	actualMergeUsers := append([]string(nil), stringsOf(p["merge_whitelist_usernames"])...)
+	actualMergeUsers := append([]string{}, stringsOf(p["merge_whitelist_usernames"])...)
 	sort.Strings(actualMergeUsers)
 	if !reflect.DeepEqual(actualMergeUsers, a.Config.MergeUsers()) || len(stringsOf(p["merge_whitelist_teams"])) != 0 {
 		return errors.New("merge whitelist differs from configured controller and authorized users")
@@ -176,6 +179,9 @@ func (a *API) Protect(ctx context.Context, apply bool) (map[string]any, error) {
 	return p, a.AuditProtection(ctx)
 }
 func (c *Controller) Merge(ctx context.Context, n int, expectedHead string) error {
+	if c.Config.ReviewOnly {
+		return errors.New("review-only service cannot merge pull requests")
+	}
 	if n < 1 || !shaPattern.MatchString(expectedHead) {
 		return errors.New("PR number and expected head SHA required")
 	}
