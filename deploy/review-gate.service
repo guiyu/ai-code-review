@@ -1,0 +1,24 @@
+[Unit]
+Description=Hermes Gitea review gate (outbound polling)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=code-review
+Group=code-review
+WorkingDirectory=/opt/ai-code-review
+EnvironmentFile=/etc/ai-code-review/review.env
+ExecStart=/opt/ai-code-review/bin/review-gate -config /etc/ai-code-review/config.json run
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ai-code-review
+
+[Install]
+WantedBy=multi-user.target

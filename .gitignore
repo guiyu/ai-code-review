@@ -50,3 +50,13 @@ build/
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Review gate runtime state and credentials
+.runtime/
+.superpowers/
+.state/
+bin/
+__pycache__/
+*.pyc
+.review-gate-state/
+/review-gate
+/review-gate.json

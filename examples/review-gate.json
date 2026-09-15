@@ -1,0 +1,28 @@
+{
+  "gitea_url": "http://120.26.178.131:3000",
+  "repository": "qianshou/Gitea_code_review",
+  "base_branch": "main",
+  "token_env": "GITEA_TOKEN",
+  "bot_username": "qianshou",
+  "allow_insecure_http": true,
+  "state_dir": "/var/lib/ai-code-review",
+  "policy_version": "2026-09-15-v1",
+  "block_threshold": "high",
+  "poll_seconds": 30,
+  "review_timeout_seconds": 300,
+  "max_diff_bytes": 200000,
+  "reviewer_command": [
+    "/opt/hermes/venv/bin/python3",
+    "-I",
+    "/opt/ai-code-review/scripts/hermes_reviewer.py"
+  ],
+  "reviewer_env": {
+    "REVIEW_MODEL": "REVIEW_MODEL",
+    "REVIEW_BASE_URL": "REVIEW_BASE_URL",
+    "REVIEW_API_KEY": "REVIEW_API_KEY",
+    "REVIEW_HERMES_PATH": "REVIEW_HERMES_PATH"
+  },
+  "identities": {},
+  "feishu_app_id_env": "FEISHU_APP_ID",
+  "feishu_app_secret_env": "FEISHU_APP_SECRET"
+}

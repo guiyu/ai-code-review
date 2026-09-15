@@ -1,147 +1,64 @@
-# 代码审查机器人
+# Hermes Gitea 自动评审门禁
 
-一个基于AI的代码审查机器人，可自动审查Gitea中的Pull Request和Push事件。
+基于 [guiyu/ai-code-review](https://github.com/guiyu/ai-code-review) 的本地派生版本。原始基线：`d830b3e87e007e1686073b5e205e30e617e295d5`。
 
-## 功能特性
+开发者推送开发分支并创建 PR 后，内网服务主动领取开放 PR，使用 Hermes 和内网模型进行 diff 范围评审。结果先写入 Gitea，再发布必需状态检查；飞书应用机器人将结果发送给 PR 发起人。主分支由 Gitea 保护规则和受信任合并命令共同把关。
 
-- 自动监听Gitea的Pull Request事件
-- 自动监听Gitea的Push事件
-- 使用AI对代码变更进行智能审查
-- 在PR和Commit中自动添加审查评论
-- 支持多种AI模型（DeepSeek、OpenAI等）
-- 可配置的日志系统
-- Webhook签名验证确保安全性
-- 钉钉通知功能（PR审查完成后发送通知）
+## 新增功能
 
-## 项目架构
+- 出站轮询：无需向公网暴露内网 Webhook 或 AI API。
+- Hermes 评审：受限 diff 读取工具、独立会话、结构化问题及证据；不执行提交代码。
+- 确定性门限：默认 critical/high 阻断；不完整、超时和无效评审不能通过。
+- 版本绑定：仓库、PR、head/base SHA、规则版本与门限共同标识任务。
+- 持久化评审与通知记录：报告/通知失败可恢复，通知失败不重复消耗模型。
+- 飞书私信：使用企业自建应用机器人及已验证的 Gitea ID → open_id 映射。
+- 严格合并：唯一 bot 合并白名单，合并前核验受信任报告、状态与当前代码版本。
 
-```
-code-review/
-├── cmd/
-│   └── server/          # 服务入口
-│       └── main.go
-├── internal/
-│   ├── ai/              # AI代码审查逻辑
-│   ├── config/          # 配置管理
-│   ├── dingtalk/        # 钉钉通知模块
-│   ├── gitea/           # Gitea API客户端
-│   ├── logger/          # 日志模块
-│   └── webhook/         # Webhook处理
-└── log/                 # 日志文件目录
+**新入口是 `cmd/review-gate`。原有 `cmd/server`、Dockerfile 和 docker-compose.yml 保留作为上游参考，不提供新门禁。** 上游使用说明见 [README.upstream.md](README.upstream.md)。
+
+## 开始
+
+要求 Go 1.24.2+，Linux/macOS，以及已安装的 Hermes Python 环境。
+
+```sh
+go build -o bin/review-gate ./cmd/review-gate
+cp examples/review-gate.json review-gate.json
 ```
 
-## 快速开始
+按 [部署说明](docs/deployment.md) 配置环境变量、状态目录、Hermes 路径和身份映射。示例默认指向 `qianshou/Gitea_code_review` 的 `main` 分支；实际启用状态见本地部署记录，不因存在示例配置而自动生效。
 
-### 环境要求
-
-- Go 1.19+
-- Gitea实例
-
-### 安装
-
-```bash
-go mod tidy
+```sh
+./bin/review-gate -config review-gate.json protect          # 查看保护计划
+./bin/review-gate -config review-gate.json protect -apply   # 需仓库管理员权限
+./bin/review-gate -config review-gate.json preflight
+./bin/review-gate -config review-gate.json once
+./bin/review-gate -config review-gate.json run
 ```
 
-### 配置
+保护配置保留已有 CI 必需检查；`hermes-review` 是额外条件。通过后由受信任操作员使用 `merge -pr NUMBER -head FULL_SHA` 执行合并，不将 bot token 发给开发者。
 
-复制 `.env.example` 文件为 `.env` 并填写相应配置：
+## 文档
 
-```bash
-cp .env.example .env
+- [内网部署与服务管理](docs/deployment.md)
+- [Hermes 适配器和评审范围](docs/hermes-adapter.md)
+- [飞书应用权限及身份映射](docs/feishu.md)
+- [设计约束](docs/superpowers/specs/2026-09-15-hermes-review-gate.md)
+- [实现计划](docs/superpowers/plans/2026-09-15-hermes-review-gate.md)
+
+## 验证
+
+```sh
+go test -race ./...
+go vet ./...
+python3 -m unittest discover -s scripts -p 'test_hermes_reviewer.py'
 ```
 
-配置项说明：
+详见各组件验证记录。单元测试通过不代表目标 Gitea 已配置，也不代表飞书已向真人送达。
 
-- `PORT`: 服务监听端口
-- `MODE`: 运行模式 (debug 或 release)
-- `AI_BASE_URL`: AI API基础URL
-- `AI_MODEL`: AI模型名称
-- `AI_API_KEY`: AI API密钥
-- `WEBHOOK_SECRET`: Gitea Webhook密钥
-- `GITEA_TOKEN`: Gitea访问令牌
-- `GITEA_BASE_URL`: Gitea API基础URL
-- `LOG_LEVEL`: 日志级别 (DEBUG, INFO, WARN, ERROR)
-- `LOG_FILE_PATH`: 日志文件路径 (留空则输出到控制台)
-- `DINGTALK_WEBHOOK_URL`: 钉钉机器人Webhook URL (可选，用于发送通知)
+## 当前边界
 
-### 运行
-
-```bash
-go run cmd/server/main.go
-```
-
-或者编译后运行：
-
-```bash
-go build -o code-review cmd/server/main.go
-./code-review
-```
-
-## Webhook配置
-
-在Gitea中配置Webhook：
-
-1. 进入仓库设置 -> Webhooks
-2. 添加Webhook
-3. 设置URL为: `http://your-domain:port/webhook/pr` (PR事件)
-4. 设置URL为: `http://your-domain:port/webhook/push` (Push事件)
-5. 内容类型选择: `application/json`
-6. 密钥填写与`.env`中`WEBHOOK_SECRET`相同的值
-7. 选择触发事件:
-   - 对于PR Webhook: 选择"Pull Request"
-   - 对于Push Webhook: 选择"Push Events"
-
-## 日志模块
-
-本项目包含一个内置的日志模块，支持以下特性：
-
-- 多级别日志记录 (DEBUG, INFO, WARN, ERROR)
-- 可配置的日志输出位置 (控制台或文件)
-- 时间戳和日志级别前缀
-
-使用方法：
-
-```go
-import "bucking.cn/code-review/internal/logger"
-
-// 初始化日志模块
-logger.Init(logger.INFO, "/path/to/logfile.log")
-defer logger.Close()
-
-// 记录不同级别的日志
-logger.Debug("调试信息: %s", debugInfo)
-logger.Info("一般信息: %s", info)
-logger.Warn("警告信息: %s", warning)
-logger.Error("错误信息: %v", err)
-```
-
-## 支持的AI模型
-
-本项目支持任何兼容OpenAI API的模型，包括：
-
-- DeepSeek (默认配置)
-- OpenAI GPT系列
-- 阿里通义千问
-- 百度文心一言
-- 腾讯混元
-
-只需在`.env`文件中配置相应的`AI_BASE_URL`和`AI_MODEL`即可。
-
-##### 钉钉通知功能
-
-本项目支持在PR代码审查完成后发送钉钉通知。要启用此功能，请执行以下步骤：
-
-1. 在钉钉群中创建自定义机器人并获取Webhook URL
-2. 在`.env`文件中配置`DINGTALK_WEBHOOK_URL`环境变量
-
-当PR审查完成后，系统会自动向配置的钉钉群发送通知，包含以下信息：
-- 项目名称
-- PR编号和标题
-- 到PR页面的链接
-
-如果钉钉机器人启用了加签安全设置，系统会自动使用配置的签名密钥对通知进行签名，确保通知的安全性。
-
-## 许可证
-
-MIT
+- 轮询模式通知 PR 发起人；识别每次 push 操作者需额外接入 Webhook。
+- 仅评审完整、受支持的文本 diff，不能替代全仓库分析、单元测试和安全扫描。二进制或超限 diff 保持阻断。
+- 初版管理入口为 CLI，无普通开发者自助申请合并页面；bot 账号必须专用。
+- 单实例状态目录加锁，合并/管理命令与常驻进程不能同时占用它。
+- 飞书发送成功代表平台接受，不代表用户已读；默认通知失败独立补发，不作为合并条件。
