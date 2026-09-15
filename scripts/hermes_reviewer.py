@@ -15,7 +15,7 @@ MAX_INPUT = 524288
 MAX_OUTPUT = 131072
 MAX_SUMMARY_CHARS = 500
 MAX_NONBLOCKING_FINDINGS = 5
-FINDING_TEXT_LIMITS = {'file': 4096, 'title': 30, 'evidence': 150, 'suggestion': 80}
+FINDING_TEXT_LIMITS = {'file': 4096, 'title': 30, 'evidence': 180, 'suggestion': 80}
 SCOPE = '证据范围：仅对本次 PR 差异及提供的上下文做静态分析；通过仅代表该范围的静态评审通过。'
 
 
@@ -35,6 +35,11 @@ def unique_object(pairs):
 def decode(raw):
     return json.loads(raw, object_pairs_hook=unique_object,
                       parse_constant=lambda _: (_ for _ in ()).throw(ReviewError('nonfinite JSON')))
+
+
+def decode_review(raw):
+    fenced = re.fullmatch(r'\s*```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*\s*', raw, flags=re.DOTALL)
+    return decode(fenced.group(1) if fenced else raw)
 
 
 def bounded_integer(env, name, default, minimum, maximum):
@@ -208,6 +213,32 @@ TOOL = {'type': 'function', 'function': {'name': 'read_diff', 'description': 'Re
 REPORT_SECTIONS = ('修改概述', '代码问题', '待确认项')
 RECOMMENDATIONS = {'通过': '可以合入', '有条件通过': '补齐指定代码证据后重新评审', '不通过': '修复后重新评审', '证据不足': '拒绝合入'}
 PRIORITIES = {'critical': 'P0', 'high': 'P1', 'medium': 'P2', 'low': 'P3', 'info': '提示'}
+REVIEW_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'complete': {'type': 'boolean', 'enum': [True]},
+        'verdict': {'type': 'string', 'enum': list(RECOMMENDATIONS)},
+        'summary': {'type': 'string', 'minLength': 1, 'maxLength': MAX_SUMMARY_CHARS},
+        'findings': {
+            'type': 'array', 'maxItems': 100,
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'severity': {'type': 'string', 'enum': list(PRIORITIES)},
+                    'file': {'type': 'string', 'minLength': 1, 'maxLength': FINDING_TEXT_LIMITS['file']},
+                    'line': {'type': 'integer', 'minimum': 1},
+                    'title': {'type': 'string', 'minLength': 1, 'maxLength': FINDING_TEXT_LIMITS['title']},
+                    'evidence': {'type': 'string', 'minLength': 1, 'maxLength': FINDING_TEXT_LIMITS['evidence']},
+                    'suggestion': {'type': 'string', 'minLength': 1, 'maxLength': FINDING_TEXT_LIMITS['suggestion']},
+                },
+                'required': ['severity', 'file', 'line', 'title', 'evidence', 'suggestion'],
+                'additionalProperties': False,
+            },
+        },
+    },
+    'required': ['complete', 'verdict', 'summary', 'findings'],
+    'additionalProperties': False,
+}
 # Trusted deployment file, never read from PR-controlled source or model input.
 SYSTEM = Path(__file__).resolve().parent.parent.joinpath('prompts/oasis-review.md').read_text(encoding='utf-8') + """
 
@@ -218,7 +249,7 @@ summary 依次包含三个二级标题，每节有中文正文：
 ## 代码问题
 ## 待确认项
 总标题、结论和合入建议由控制器生成。complete 表示可用证据评审已完成，证据不足也返回 true 和对应 verdict。
-findings 仅列已证实问题；file/line 必须在 allowed_finding_lines 内，line 是源码行号而非 read_diff 全局索引。未知位置的推测只放待确认项。P0/P1/P2/P3 对应 critical/high/medium/low；存在 P0/P1 不得通过。所有 P0/P1 必须保留；medium/low/info 合并同类后合计最多 5 条。title 不超过 30 字，evidence 不超过 150 字，suggestion 不超过 80 字。所有说明用中文。
+findings 仅列已证实问题；file/line 必须在 allowed_finding_lines 内，line 是源码行号而非 read_diff 全局索引。未知位置的推测只放待确认项。P0/P1/P2/P3 对应 critical/high/medium/low；存在 P0/P1 不得通过。所有 P0/P1 必须保留；medium/low/info 合并同类后合计最多 5 条。title 不超过 30 字，evidence 不超过 180 字，suggestion 不超过 80 字。所有说明用中文。
 """
 
 
@@ -264,7 +295,8 @@ def run_agent(config, value, evidence):
                 module = importlib.import_module('run_agent')
                 # Deny dispatch independently of the tools advertised to the model.
                 module.handle_function_call = evidence.dispatch
-                agent = module.AIAgent(model=config['MODEL'], base_url=config['BASE_URL'], api_key=config['API_KEY'], provider='custom', api_mode='chat_completions', max_iterations=config['MAX_ITERATIONS'], max_tokens=config['MAX_TOKENS'], enabled_toolsets=[], skip_context_files=True, skip_memory=True, load_soul_identity=False, save_trajectories=False, verbose_logging=False, quiet_mode=True, checkpoints_enabled=False, fallback_model=None, request_overrides={'response_format': {'type': 'json_object'}})
+                response_format = {'type': 'json_schema', 'json_schema': {'name': 'oasis_review', 'strict': True, 'schema': REVIEW_SCHEMA}}
+                agent = module.AIAgent(model=config['MODEL'], base_url=config['BASE_URL'], api_key=config['API_KEY'], provider='custom', api_mode='chat_completions', max_iterations=config['MAX_ITERATIONS'], max_tokens=config['MAX_TOKENS'], enabled_toolsets=[], skip_context_files=True, skip_memory=True, load_soul_identity=False, save_trajectories=False, verbose_logging=False, quiet_mode=True, checkpoints_enabled=False, fallback_model=None, request_overrides={'response_format': response_format})
                 agent.tools = [TOOL]
                 agent.valid_tool_names = {'read_diff'}
                 metadata = {key: val for key, val in value.items() if key != 'diff'}
@@ -323,7 +355,7 @@ def validate_output(result, evidence, locations):
     raw = result.get('final_response')
     if not isinstance(raw, str) or len(raw.encode('utf-8')) > MAX_OUTPUT:
         raise ReviewError('invalid response size')
-    output = decode(raw)
+    output = decode_review(raw)
     if not isinstance(output, dict) or set(output) != {'complete', 'verdict', 'summary', 'findings'} or output['complete'] is not True:
         raise ReviewError('invalid review schema')
     if not isinstance(output['summary'], str) or not output['summary'].strip() or len(output['summary']) > MAX_SUMMARY_CHARS:
