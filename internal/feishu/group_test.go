@@ -54,3 +54,31 @@ func TestGroupWebhookRejectsRedirect(t *testing.T) {
 		t.Fatal("accepted redirect")
 	}
 }
+
+func TestGroupWebhookUsesExactConfiguredKeyword(t *testing.T) {
+	var got string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p struct {
+			Content struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		json.NewDecoder(r.Body).Decode(&p)
+		got = p.Content.Text
+		if !strings.HasPrefix(got, "1. codereview\n") {
+			w.Write([]byte(`{"code":19024}`))
+			return
+		}
+		w.Write([]byte(`{"code":0}`))
+	}))
+	defer server.Close()
+	c := NewGroupClient(server.URL)
+	c.HTTPClient = server.Client()
+	c.Keyword = "1. codereview"
+	if _, e := c.Send(context.Background(), "group", "中文评审结果", "run"); e != nil {
+		t.Fatal(e)
+	}
+	if got != "1. codereview\n中文评审结果" {
+		t.Fatal("configured keyword changed")
+	}
+}

@@ -14,12 +14,13 @@ import (
 // GroupClient sends only controller-generated review notifications to a custom bot.
 // Configure HTTPClient before use. The webhook is a secret and is never logged.
 type GroupClient struct {
+	Keyword    string
 	webhook    string
 	HTTPClient *http.Client
 }
 
 func NewGroupClient(webhook string) *GroupClient {
-	return &GroupClient{webhook: webhook, HTTPClient: &http.Client{Timeout: requestTimeout}}
+	return &GroupClient{Keyword: "codereview", webhook: webhook, HTTPClient: &http.Client{Timeout: requestTimeout}}
 }
 
 // Send returns a local acceptance marker, not a Feishu message ID. Custom bots do
@@ -32,7 +33,7 @@ func (c *GroupClient) Send(ctx context.Context, _ string, text, uuid string) (st
 	if strings.TrimSpace(text) == "" || strings.TrimSpace(uuid) == "" {
 		return "", errors.New("feishu group: text and run key required")
 	}
-	payload, _ := json.Marshal(map[string]any{"msg_type": "text", "content": map[string]string{"text": "codereview\n" + text}})
+	payload, _ := json.Marshal(map[string]any{"msg_type": "text", "content": map[string]string{"text": c.Keyword + "\n" + text}})
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.webhook, bytes.NewReader(payload))
