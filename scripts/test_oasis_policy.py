@@ -8,7 +8,7 @@ adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
 from test_hermes_reviewer import DIFF
 
-SECTIONS = ['评审范围', '修改目标与实现分析', '代码问题清单', '跨仓影响范围', '修改完整性评估', '历史问题回归评估', '构建与真机验证矩阵']
+SECTIONS = ['修改概述', '代码问题', '待确认项']
 SUMMARY = '\n\n'.join('## '+name+'\n证据不足：仅提供本次提交日志及差异，未提供关联仓库。' for name in SECTIONS)
 
 class OasisPolicyTests(unittest.TestCase):
@@ -23,7 +23,8 @@ class OasisPolicyTests(unittest.TestCase):
   self.assertIn('Oasis 智能眼镜', adapter.SYSTEM)
   self.assertIn('commit', adapter.SYSTEM)
   self.assertIn('推断', adapter.SYSTEM)
-  self.assertIn('ANCS', adapter.SYSTEM)
+  self.assertIn('静态分析', adapter.SYSTEM)
+  self.assertNotIn('## 构建与真机验证矩阵', adapter.SYSTEM)
  def test_insufficient_evidence_keeps_formal_report(self):
   result=self.validate()
   self.assertTrue(result['complete'])
@@ -72,3 +73,12 @@ class OasisPolicyTests(unittest.TestCase):
   result=self.validate(summary='# 《Oasis 嵌入式代码评审报告》\n\n'+SUMMARY)
   self.assertEqual(result['verdict'],'证据不足')
   self.assertEqual(result['summary'].count('# Oasis 嵌入式代码评审报告'),1)
+
+ def test_section_annotation_is_preserved(self):
+  result=self.validate(summary=SUMMARY.replace('## 待确认项','## 待确认项（待执行）'))
+  self.assertIn('## 待确认项\n（待执行）',result['summary'])
+  self.assertEqual(result['verdict'],'证据不足')
+
+ def test_heading_notes_do_not_replace_analysis(self):
+  with self.assertRaises(adapter.ReviewError):
+   self.validate(verdict='通过',summary='\n\n'.join('## '+name+'（待确认）' for name in SECTIONS))

@@ -9,7 +9,7 @@ import unittest
 
 SCRIPT = Path(__file__).with_name('hermes_reviewer.py')
 DIFF = 'diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n'
-GOOD = {'complete': True, 'verdict': '通过', 'summary': '\n\n'.join('## '+section+'\n根据提交差异完成本节审查，待验证项无相关证据。' for section in ['评审范围','修改目标与实现分析','代码问题清单','跨仓影响范围','修改完整性评估','历史问题回归评估','构建与真机验证矩阵']), 'findings': []}
+GOOD = {'complete': True, 'verdict': '通过', 'summary': '\n\n'.join('## '+section+'\n根据提交差异完成本节审查，待验证项无相关证据。' for section in ['修改概述','代码问题','待确认项']), 'findings': []}
 FAKE = '''import os, json
 print('SECRET FROM LIBRARY')
 from hermes_cli.env_loader import load_hermes_dotenv
@@ -34,6 +34,7 @@ class AIAgent:
   assert 'Oasis 智能眼镜' in kw['system_message']
   assert 'commit log' in kw['system_message']
   assert 'SECRET' not in kw['user_message']
+  assert json.loads(kw['user_message'])['allowed_finding_lines']['a.py'] == [1]
   assert json.loads(handle_function_call('terminal', {'command':'id'}))['error']
   if READ:
    data = json.loads(handle_function_call('read_diff', {'start_line':1, 'line_count':200}))
