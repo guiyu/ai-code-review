@@ -279,7 +279,7 @@ def run_agent(config, value, evidence):
 
 def normalize_report_sections(text, verdict):
     pieces = re.split(r'^## (.+)$', text, flags=re.MULTILINE)
-    if pieces[0].strip() not in ('', '# Oasis 嵌入式代码评审报告'):
+    if pieces[0].strip() not in ('', '# Oasis 嵌入式代码评审报告', '# 《Oasis 嵌入式代码评审报告》'):
         raise ReviewError('missing or unordered report sections')
     sections = list(zip(pieces[1::2], pieces[2::2]))
     if sections and sections[0][0] == '评审结论':
