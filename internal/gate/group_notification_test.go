@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -79,5 +80,24 @@ func TestFailedGroupCanSwitchToDM(t *testing.T) {
 	}
 	if !r.Notified || r.Recipient != "ou_verified" || n.calls != 2 {
 		t.Fatal("DM retry did not resolve identity")
+	}
+}
+
+func TestNotificationIncludesPRAuthorBeforeLongReport(t *testing.T) {
+	c := &Controller{Config: DefaultConfig()}
+	r := &Run{PR: PR{Number: 3, User: User{ID: 37, Login: "qianshou"}}, Status: "success", Result: &Result{Summary: strings.Repeat("评审正文", 4000)}, ReportURL: "https://gitea.example/report"}
+	body := c.notification(r)
+	if !strings.Contains(body, "PR 提交人：qianshou（Gitea ID：37）") {
+		t.Fatal("missing PR author")
+	}
+	if !strings.HasSuffix(body, r.ReportURL) {
+		t.Fatal("report link lost")
+	}
+}
+func TestNotificationMissingAuthorDoesNotInventIdentity(t *testing.T) {
+	c := &Controller{Config: DefaultConfig()}
+	body := c.notification(&Run{PR: PR{User: User{ID: 37}}})
+	if !strings.Contains(body, "PR 提交人：未提供用户名（Gitea ID：37）") {
+		t.Fatal("missing explicit author fallback")
 	}
 }

@@ -50,3 +50,9 @@ API references: [tenant access token](https://open.feishu.cn/document/server-doc
 Verified with Go 1.24 Alpine in Docker: `go test -timeout 30s ./internal/feishu` passed (0.822s), and `go vet ./internal/feishu` completed cleanly. Additional tests cover timed cache renewal, cancellation while waiting for another token refresh, and oversized responses. Repository-wide race validation is recorded separately in the controller validation report.
 
 HTTP 400/401 authentication responses are parsed within the same response-size limit, permitting a single token refresh with the original UUID. HTTP 5xx, malformed bodies, and non-authentication errors remain failures. Retry codes follow the [official Go SDK constants](https://github.com/larksuite/oapi-sdk-go/blob/v3_main/core/constants.go); user-token error 99991668 does not trigger a tenant-token refresh. Regression tests were observed failing for HTTP 400/401 before this fix.
+
+## 提交人展示及 Webhook 切换
+
+通知在评审正文前显示 `PR 提交人：用户名（Gitea ID：数字）`，使用 Gitea PR API 的 `user.login` / `user.id`。身份缺失时明确显示缺失，长报告截断后仍保留此信息。这代表 PR 发起人；轮询不能将其认定为每次 push 的实际操作者。
+
+替换私有环境中的 `FEISHU_WEBHOOK_URL` 并重启各实例即可切换机器人。已确认发送成功的历史报告不会因换群而自动重发；未发送成功的队列项将发送至新目标。

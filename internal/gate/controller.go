@@ -282,7 +282,12 @@ func (c *Controller) findReport(ctx context.Context, r *Run) (Comment, error) {
 	return Comment{}, errors.New("comment pagination limit")
 }
 func (c *Controller) notification(r *Run) string {
+	author := r.PR.User.Login
+	if author == "" {
+		author = "未提供用户名"
+	}
 	body := fmt.Sprintf("Oasis 代码评审 %s #%d：%s\n评审提交 %s，目标分支提交 %s；本报告仅适用于此版本组合。\n", c.Config.Repository, r.PR.Number, r.Status, r.PR.Head.SHA, r.PR.Base.SHA)
+	body += fmt.Sprintf("PR 提交人：%s（Gitea ID：%d）\n", author, r.PR.User.ID)
 	if r.Result != nil {
 		body += r.Result.Summary + "\n"
 		counts := map[string]int{}
