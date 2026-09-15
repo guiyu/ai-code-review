@@ -9,7 +9,7 @@
   "policy_version": "oasis-v1",
   "block_threshold": "high",
   "poll_seconds": 30,
-  "review_timeout_seconds": 300,
+  "review_timeout_seconds": 1260,
   "max_diff_bytes": 200000,
   "reviewer_command": [
     "/opt/hermes/venv/bin/python3",
@@ -20,7 +20,9 @@
     "REVIEW_MODEL": "REVIEW_MODEL",
     "REVIEW_BASE_URL": "REVIEW_BASE_URL",
     "REVIEW_API_KEY": "REVIEW_API_KEY",
-    "REVIEW_HERMES_PATH": "REVIEW_HERMES_PATH"
+    "REVIEW_HERMES_PATH": "REVIEW_HERMES_PATH",
+    "REVIEW_TIMEOUT_SECONDS": "REVIEW_TIMEOUT_SECONDS",
+    "REVIEW_MAX_TOKENS": "REVIEW_MAX_TOKENS"
   },
   "identities": {},
   "feishu_app_id_env": "FEISHU_APP_ID",

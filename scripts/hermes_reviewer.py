@@ -274,12 +274,18 @@ def run_agent(config, value, evidence):
             os.chdir(previous_cwd)
 
 
-def validate_output(result, evidence, locations):
-    if not isinstance(result, dict) or result.get('completed') is not True or result.get('error'):
+def validate_completion(result):
+    if not isinstance(result, dict):
         raise ReviewError('Hermes did not complete')
     for message in result.get('messages', []):
         if isinstance(message, dict) and message.get('finish_reason') in ('length', 'incomplete', 'content_filter'):
             raise ReviewError('truncated or filtered response')
+    if result.get('completed') is not True or result.get('error'):
+        raise ReviewError('Hermes did not complete')
+
+
+def validate_output(result, evidence, locations):
+    validate_completion(result)
     if len(evidence.seen) != len(evidence.lines):
         raise ReviewError('incomplete diff coverage')
     raw = result.get('final_response')
@@ -324,8 +330,10 @@ def validate_output(result, evidence, locations):
 
 
 def main():
+    failure_code = 'CONFIG_INVALID'
     try:
         config = configuration(os.environ)
+        failure_code = 'INPUT_INVALID'
         raw = sys.stdin.buffer.read(config['MAX_INPUT_BYTES'] + 1)
         if len(raw) > config['MAX_INPUT_BYTES']:
             raise ReviewError('input exceeds limit')
@@ -337,15 +345,22 @@ def main():
             raise SystemExit(124)
         signal.signal(signal.SIGALRM, expired)
         signal.alarm(config['TIMEOUT_SECONDS'])
+        failure_code = 'MODEL_EXECUTION_FAILED'
         result = run_agent(config, value, evidence)
+        validate_completion(result)
+        failure_code = 'OUTPUT_INVALID'
         output = validate_output(result, evidence, locations)
         signal.alarm(0)
         print(json.dumps(output, ensure_ascii=False))
         return 0
-    except BaseException:
+    except BaseException as error:
         signal.alarm(0)
+        if isinstance(error, SystemExit) and error.code == 124:
+            failure_code = 'REVIEW_TIMEOUT'
+        elif isinstance(error, ReviewError) and str(error) == 'truncated or filtered response':
+            failure_code = 'OUTPUT_TRUNCATED'
         # Never echo library exceptions, model output, endpoint, or input content.
-        print(json.dumps({'complete': False, 'summary': 'Hermes review failed or was incomplete; gate must remain blocked.', 'findings': []}))
+        print(json.dumps({'complete': False, 'error_code': failure_code, 'summary': '评审执行失败，禁止合入。', 'findings': []}))
         return 1
 
 

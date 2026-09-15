@@ -64,7 +64,9 @@ class AdapterTests(unittest.TestCase):
  def test_incomplete_agent_fails(self):
   p=self.run_adapter({'completed':False,'final_response':json.dumps(GOOD)}); self.assertNotEqual(p.returncode,0); self.assertFalse(json.loads(p.stdout)['complete'])
  def test_agent_error_fails_even_with_complete(self):
-  self.assertNotEqual(self.run_adapter({'completed':True,'error':'PRIVATE','final_response':json.dumps(GOOD)}).returncode,0)
+  p=self.run_adapter({'completed':True,'error':'PRIVATE','final_response':json.dumps(GOOD)})
+  self.assertNotEqual(p.returncode,0)
+  self.assertEqual(json.loads(p.stdout).get('error_code'),'MODEL_EXECUTION_FAILED')
  def test_unread_diff_fails(self):
   self.assertNotEqual(self.run_adapter(read=False).returncode,0)
  def test_malformed_output_fails(self):
@@ -95,6 +97,7 @@ class AdapterTests(unittest.TestCase):
  def test_deadline_fails_closed(self):
   p=self.run_adapter('sleep',extra={'REVIEW_TIMEOUT_SECONDS':'1'})
   self.assertNotEqual(p.returncode,0); self.assertFalse(json.loads(p.stdout)['complete'])
+  self.assertEqual(json.loads(p.stdout).get('error_code'),'REVIEW_TIMEOUT')
  def test_oversized_output_fails(self):
   self.assertNotEqual(self.run_adapter({'completed':True,'final_response':'x'*131073}).returncode,0)
  def test_invalid_limits_fail(self):
@@ -110,7 +113,12 @@ class AdapterTests(unittest.TestCase):
     p=self.run_adapter(payload=payload)
     self.assertNotEqual(p.returncode,0); self.assertFalse(json.loads(p.stdout)['complete'])
  def test_length_finish_reason_fails(self):
-  self.assertNotEqual(self.run_adapter({'completed':True,'final_response':json.dumps(GOOD),'messages':[{'role':'assistant','finish_reason':'length'}]}).returncode,0)
+  p=self.run_adapter({'completed':True,'final_response':json.dumps(GOOD),'messages':[{'role':'assistant','finish_reason':'length'}]})
+  self.assertNotEqual(p.returncode,0)
+  self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_TRUNCATED')
+  p=self.run_adapter({'completed':False,'error':'PRIVATE','messages':[{'finish_reason':'length'}]})
+  self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_TRUNCATED')
+
 
 
 

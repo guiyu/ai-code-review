@@ -173,6 +173,30 @@ type Reviewer interface {
 type Notifier interface {
 	Send(context.Context, string, string, string) (string, error)
 }
+
+var reviewerFailureDescriptions = map[string]string{
+	"REVIEW_TIMEOUT":            "评审执行超时",
+	"INPUT_INVALID":             "评审输入无效或超出限制",
+	"CONFIG_INVALID":            "评审器配置无效",
+	"MODEL_EXECUTION_FAILED":    "模型调用或 Agent 执行失败",
+	"OUTPUT_TRUNCATED":          "模型输出被截断，未取得完整可信报告",
+	"OUTPUT_INVALID":            "模型输出未满足报告格式或证据覆盖要求",
+	"REVIEWER_EXECUTION_FAILED": "评审子进程执行失败",
+}
+
+type ReviewerFailure struct{ Code string }
+
+func (e *ReviewerFailure) Error() string { return "reviewer failed: " + e.Code }
+func reviewFailureMessage(err error) string {
+	var failure *ReviewerFailure
+	if errors.As(err, &failure) {
+		if description, ok := reviewerFailureDescriptions[failure.Code]; ok {
+			return description + "（" + failure.Code + "），禁止合入。"
+		}
+	}
+	return "评审执行失败，禁止合入；请检查证据输入或模型运行状态。"
+}
+
 type SubprocessReviewer struct{ Config Config }
 type cappedBuffer struct {
 	bytes.Buffer
@@ -217,7 +241,23 @@ func (s SubprocessReviewer) Review(ctx context.Context, in ReviewInput) (Result,
 	cmd.Stdout = out
 	cmd.Stderr = io.Discard
 	if e = cmd.Run(); e != nil {
-		return Result{}, errors.New("reviewer execution failed")
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return Result{}, &ReviewerFailure{Code: "REVIEW_TIMEOUT"}
+		}
+		var failure struct {
+			Complete bool   `json:"complete"`
+			Code     string `json:"error_code"`
+		}
+		if json.Unmarshal(out.Bytes(), &failure) == nil && !failure.Complete {
+			if _, ok := reviewerFailureDescriptions[failure.Code]; ok {
+				return Result{}, &ReviewerFailure{Code: failure.Code}
+			}
+		}
+		return Result{}, &ReviewerFailure{Code: "REVIEWER_EXECUTION_FAILED"}
 	}
-	return DecodeResult(out.Bytes())
+	result, err := DecodeResult(out.Bytes())
+	if err != nil {
+		return Result{}, &ReviewerFailure{Code: "OUTPUT_INVALID"}
+	}
+	return result, nil
 }
