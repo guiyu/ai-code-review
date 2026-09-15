@@ -102,17 +102,33 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 		if e := c.API.Current(ctx, p); e != nil {
 			return e
 		}
+		commits, e := c.API.PullCommits(ctx, p.Number)
+		if e != nil {
+			return e
+		}
+		foundHead := false
+		for _, commit := range commits {
+			if commit.SHA == p.Head.SHA {
+				foundHead = true
+			}
+		}
+		if !foundHead {
+			return errors.New("PR commit history missing reviewed head")
+		}
+		if e := c.API.Current(ctx, p); e != nil {
+			return e
+		}
 		r.Attempts++
 		if e := c.Store.Save(); e != nil {
 			return e
 		}
-		res, e := c.Reviewer.Review(ctx, ReviewInput{c.Config.Repository, p.Number, p.Head.SHA, p.Base.SHA, diff, p.Title})
+		res, e := c.Reviewer.Review(ctx, ReviewInput{Repository: c.Config.Repository, Number: p.Number, HeadSHA: p.Head.SHA, BaseSHA: p.Base.SHA, Diff: diff, Title: p.Title, Description: p.Body, HeadRef: p.Head.Ref, BaseRef: p.Base.Ref, MergeBase: p.MergeBase, Commits: commits})
 		if e == nil {
 			data, _ := json.Marshal(res)
 			res, e = DecodeResult(data)
 		}
 		if e != nil {
-			r.ReviewError = "Reviewer failed; approval withheld"
+			r.ReviewError = "评审执行失败，禁止合入；请检查证据输入或模型运行状态。"
 			r.NextAttemptUnix = time.Now().Add(time.Duration(30*(1<<r.Attempts)) * time.Second).Unix()
 		} else {
 			r.Result = &res
@@ -178,18 +194,18 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 	return nil
 }
 func (c *Controller) report(r *Run) string {
-	body := fmt.Sprintf("<!-- hermes-review:%s -->\n## Hermes review\nPR #%d · head `%s` · base `%s` · policy `%s`\n\n", r.Key, r.PR.Number, r.PR.Head.SHA, r.PR.Base.SHA, c.Config.PolicyVersion)
+	body := fmt.Sprintf("<!-- hermes-review:%s -->\n## 自动代码评审\nPR #%d · 提交 `%s` · 目标分支提交 `%s` · 策略 `%s`\n\n", r.Key, r.PR.Number, r.PR.Head.SHA, r.PR.Base.SHA, c.Config.PolicyVersion)
 	if r.Result == nil {
 		return body + r.ReviewError
 	}
 	body += r.Result.Summary + "\n\n"
 	for _, f := range r.Result.Findings {
-		body += fmt.Sprintf("### %s: %s\n`%s:%d`\n\nEvidence: %s\n\nSuggestion: %s\n\n", f.Severity, f.Title, f.File, f.Line, f.Evidence, f.Suggestion)
+		body += fmt.Sprintf("### %s: %s\n`%s:%d`\n\n证据：%s\n\n修复建议及验证方法：%s\n\n", f.Severity, f.Title, f.File, f.Line, f.Evidence, f.Suggestion)
 	}
 	if r.Result.Passes(c.Config.BlockThreshold) {
-		body += "**Gate: PASS**"
+		body += "**合并门禁：通过**"
 	} else {
-		body += "**Gate: BLOCKED**"
+		body += "**合并门禁：禁止合入**"
 	}
 	return body
 }
@@ -266,14 +282,14 @@ func (c *Controller) findReport(ctx context.Context, r *Run) (Comment, error) {
 	return Comment{}, errors.New("comment pagination limit")
 }
 func (c *Controller) notification(r *Run) string {
-	body := fmt.Sprintf("Hermes review %s #%d: %s\nReviewed head %s against base %s. This report applies only to these commits.\n", c.Config.Repository, r.PR.Number, r.Status, r.PR.Head.SHA, r.PR.Base.SHA)
+	body := fmt.Sprintf("Oasis 代码评审 %s #%d：%s\n评审提交 %s，目标分支提交 %s；本报告仅适用于此版本组合。\n", c.Config.Repository, r.PR.Number, r.Status, r.PR.Head.SHA, r.PR.Base.SHA)
 	if r.Result != nil {
 		body += r.Result.Summary + "\n"
 		counts := map[string]int{}
 		for _, f := range r.Result.Findings {
 			counts[f.Severity]++
 		}
-		body += fmt.Sprintf("critical=%d high=%d medium=%d low=%d info=%d\n", counts["critical"], counts["high"], counts["medium"], counts["low"], counts["info"])
+		body += fmt.Sprintf("P0=%d P1=%d P2=%d P3=%d 提示=%d\n", counts["critical"], counts["high"], counts["medium"], counts["low"], counts["info"])
 		for i, f := range r.Result.Findings {
 			if i == 3 {
 				break
@@ -284,7 +300,7 @@ func (c *Controller) notification(r *Run) string {
 		body += r.ReviewError + "\n"
 	}
 	if len(body) > 12000 {
-		body = string([]rune(body)[:2000]) + "\n[See complete report]\n"
+		body = string([]rune(body)[:2000]) + "\n[完整内容请查看评审报告]\n"
 	}
 	return body + r.ReportURL
 }

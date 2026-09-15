@@ -1,6 +1,6 @@
 # Hermes review adapter
 
-`scripts/hermes_reviewer.py` runs one isolated Hermes `AIAgent` conversation per invocation. It reads the controller's JSON request on stdin and writes exactly one JSON review object on stdout. Exit 0 means a structurally valid, complete review was returned; severity policy still decides whether merge is allowed. Every exception, timeout, unsupported input, unread evidence range, invalid finding or incomplete response exits nonzero with `complete:false`.
+`scripts/hermes_reviewer.py` runs one isolated Hermes `AIAgent` conversation per invocation. It reads the controller's JSON request on stdin and writes exactly one JSON review object on stdout. Exit 0 means a structurally valid, complete review was returned; the explicit Chinese verdict and severity policy decide whether merge is allowed. Every exception, timeout, unsupported input, unread evidence range, invalid finding or incomplete response exits nonzero with `complete:false`.
 
 ## Runtime interface
 
@@ -44,11 +44,13 @@ The adapter suppresses third-party stdout/stderr at the file descriptor boundary
 
 ## Review scope and validation
 
-Input fields: `repository`, `number`, `head_sha`, `base_sha`, `title`, `diff`. Output fields: `complete`, `summary`, `findings`. Each finding has `severity`, `file`, `line`, `title`, `evidence`, `suggestion`; severity is one of `critical`, `high`, `medium`, `low`, `info`.
+Input fields: `repository`, `number`, `head_sha`, `base_sha`, `title`, `diff`, `description`, `head_ref`, `base_ref`, `merge_base`, `commits` (SHA/message pairs). Output fields: `complete`, `verdict`, `summary`, `findings`. Each finding has `severity`, `file`, `line`, `title`, `evidence`, `suggestion`; severity is one of `critical`, `high`, `medium`, `low`, `info`.
 
-A successful summary always starts with:
+A successful adapter response always produces a report starting with:
 
-> Coverage: diff-only; all supplied lines made available via evidence tool; no full repository, dependencies, builds or runtime tests.
+> # Oasis 嵌入式代码评审报告
+
+The report includes an explicit Chinese evidence-scope statement. `complete:true` means the supplied evidence was processed; it does not mean full repository coverage or approval. `verdict` is mandatory: `通过`, `有条件通过`, `不通过`, or `证据不足`. Only `通过` can pass the gate, and findings must also satisfy the severity threshold. Evidence gaps retain a full report instead of being treated as an adapter execution failure.
 
 Tool coverage proves which evidence was presented; it does not prove model understanding or absence of defects. Findings must name a supplied file and a positive line represented in its textual hunks (old line for deletion, new line for addition/context). Duplicate JSON keys, missing/extra schema fields, invalid finding types/severities/locations and empty text fail closed. Hermes must report `completed:true`, no error, and no message with truncated/filtered finish reasons; its final response must itself be strict JSON with `complete:true`.
 
@@ -73,3 +75,13 @@ TEST_HERMES_SOURCE=/opt/hermes /opt/hermes/venv/bin/python -m unittest discover 
 Verification on 2026-09-15: all 19 tests passed with installed Hermes, including an actual streamed model tool-call loop against the localhost mock. The default suite passed 18 boundary tests and skipped that opt-in integration. Tests cover isolated environment/working directory, only the evidence tool being advertised, dispatch refusal, strict JSON, secret diagnostic suppression, input/output size bounds, configuration limits and deadline, exception diagnostic suppression, malformed/truncated diffs (including an incomplete trailing file), valid multiple-file diffs, completeness, unread evidence, invalid findings and completion truncation. The mock integration observed `read_diff`, its supplied diff result, and a valid final JSON response.
 
 An authorized live smoke also passed against the configured private model API using only an artificial six-line diff: adapter exit 0, valid JSON, `complete:true`, zero findings, diff-only scope present and empty stderr. Credentials were loaded from existing local Hermes configuration into dedicated child configuration without printing them. No real repository content, Gitea writes or Feishu messages were involved. This verifies basic private-model compatibility, not model review quality.
+
+## 所有自动 PR 的 Oasis 默认规则
+
+可信部署文件 `prompts/oasis-review.md` 固定加载到每次 Hermes 系统提示词；无需 PR 作者提供需求描述。需求优先从 PR 说明、全部提交日志和差异推断，报告必须说明推断依据。PR 内容不能覆盖系统提示词。
+
+Controller 分页收集 PR 全部提交 SHA 和完整消息，获取失败、重复记录、超过 1000 条/200 KB、缺少目标 HEAD 均阻断，不静默截断。采集前后再次校验 head/base；不是只取最后一条 commit。Python 仍只开放 read_diff，提交日志与 PR 元数据作为不可信证据输入。未提供本机工作区、关联仓库或真实固件组合时必须标出，不会自动把本机其他分支混进远端 PR。
+
+模型返回七个中文正文章节；适配器验证章节顺序及中文内容，再确定性生成总标题、评审结论、最高已证实风险等级和最终合入建议，形成完整九章报告。P0/P1/P2/P3 分别对应 critical/high/medium/low。有条件通过保持阻断，需指定验证完成后更新证据并重新评审。仅普通文档变更可基于局部证据通过；涉及跨仓/跨核逻辑但缺必要证据时不能伪装通过。
+
+提示词与适配器均是部署文件，必须一起安装；调整提示词时同步升级 `policy_version`，旧结论不会作为新策略下的合入凭据。当前默认策略为 `oasis-v1`。修改 PR 说明本身不自动触发重新评审；需新提交或升级策略版本。

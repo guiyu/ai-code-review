@@ -15,7 +15,7 @@ func TestPolicyFailClosed(t *testing.T) {
 			t.Fatalf("accepted %s", raw)
 		}
 	}
-	r, err := DecodeResult([]byte(`{"complete":true,"summary":"ok","findings":[]}`))
+	r, err := DecodeResult([]byte(`{"complete":true,"verdict":"通过","summary":"ok","findings":[]}`))
 	if err != nil || !r.Passes("high") {
 		t.Fatal(r, err)
 	}
@@ -49,16 +49,18 @@ func TestStoreExclusiveAndRestart(t *testing.T) {
 }
 
 type fakeReviewer struct {
+	input ReviewInput
 	calls int
 	fail  int
 }
 
-func (r *fakeReviewer) Review(context.Context, ReviewInput) (Result, error) {
+func (r *fakeReviewer) Review(_ context.Context, in ReviewInput) (Result, error) {
+	r.input = in
 	r.calls++
 	if r.calls <= r.fail {
 		return Result{}, errTest
 	}
-	return Result{Complete: true, Summary: "Reviewed", Findings: []Finding{}}, nil
+	return Result{Verdict: "通过", Complete: true, Summary: "Reviewed", Findings: []Finding{}}, nil
 }
 
 type fakeNotify struct {
@@ -84,6 +86,12 @@ func TestReportBeforeSuccessAndRetry(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		switch {
+		case strings.HasSuffix(p, "/pulls/1/commits"):
+			if r.URL.Query().Get("page") != "1" {
+				w.Write([]byte(`[]`))
+				return
+			}
+			json.NewEncoder(w).Encode([]map[string]any{{"sha": head, "commit": map[string]string{"message": "fix: 本次需求"}}})
 		case strings.HasSuffix(p, "/pulls"):
 			json.NewEncoder(w).Encode([]PR{{Number: 1, State: "open", Head: Ref{SHA: head}, Base: Ref{Ref: "main", SHA: base}, User: User{ID: 9}}})
 		case strings.HasSuffix(p, "/pulls/1.diff"):
@@ -142,6 +150,9 @@ func TestReportBeforeSuccessAndRetry(t *testing.T) {
 	if e := c.Once(context.Background()); e == nil {
 		t.Fatal("notification error ignored")
 	}
+	if len(rv.input.Commits) != 1 || rv.input.Commits[0].SHA != head || rv.input.Commits[0].Message != "fix: 本次需求" {
+		t.Fatal("commit evidence not delivered to reviewer")
+	}
 	if rv.calls != 1 {
 		t.Fatal("re-reviewed", rv.calls)
 	}
@@ -182,6 +193,12 @@ func TestStaleDuringDiffNeverReviews(t *testing.T) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/pulls"):
 			json.NewEncoder(w).Encode([]PR{p})
+		case strings.HasSuffix(r.URL.Path, "/pulls/1/commits"):
+			if r.URL.Query().Get("page") != "1" {
+				w.Write([]byte(`[]`))
+				return
+			}
+			json.NewEncoder(w).Encode([]map[string]any{{"sha": head, "commit": map[string]string{"message": "fix: 本次需求"}}})
 		case strings.HasSuffix(r.URL.Path, ".diff"):
 			changed = true
 			w.Write([]byte("diff"))
@@ -282,7 +299,7 @@ func TestSubprocessIsolationAndTimeout(t *testing.T) {
 	t.Setenv("GITEA_TOKEN", "never-child")
 	t.Setenv("FEISHU_APP_SECRET", "never-child")
 	cfg := DefaultConfig()
-	cfg.ReviewerCommand = []string{"/bin/sh", "-c", `test -z "$GITEA_TOKEN$FEISHU_APP_SECRET" || exit 1; printf '{"complete":true,"summary":"isolated","findings":[]}'`}
+	cfg.ReviewerCommand = []string{"/bin/sh", "-c", `test -z "$GITEA_TOKEN$FEISHU_APP_SECRET" || exit 1; printf '{"complete":true,"verdict":"通过","summary":"isolated","findings":[]}'`}
 	r, e := (SubprocessReviewer{cfg}).Review(context.Background(), ReviewInput{})
 	if e != nil || r.Summary != "isolated" {
 		t.Fatal(r, e)
@@ -345,7 +362,7 @@ func TestMergeTrustedCurrentReview(t *testing.T) {
 	cfg.GiteaURL = srv.URL
 	c.Config = cfg
 	api.Config = cfg
-	run = &Run{Key: cfg.Key(p), PR: p, Result: &Result{Complete: true, Summary: "ok", Findings: []Finding{}}, ReportID: 7, ReportURL: "http://report", Status: "success"}
+	run = &Run{Key: cfg.Key(p), PR: p, Result: &Result{Verdict: "通过", Complete: true, Summary: "ok", Findings: []Finding{}}, ReportID: 7, ReportURL: "http://report", Status: "success"}
 	run.ReportBody = c.report(run)
 	s.Runs[run.Key] = run
 	if e := c.Merge(context.Background(), 1, p.Head.SHA); e != nil {
@@ -372,6 +389,12 @@ func TestAutomaticReviewerRetryAndCommentRecovery(t *testing.T) {
 			json.NewEncoder(w).Encode(p)
 		case strings.Contains(r.URL.Path, "/branches/"):
 			json.NewEncoder(w).Encode(map[string]any{"commit": map[string]string{"id": p.Base.SHA}})
+		case strings.HasSuffix(r.URL.Path, "/pulls/1/commits"):
+			if r.URL.Query().Get("page") != "1" {
+				w.Write([]byte(`[]`))
+				return
+			}
+			json.NewEncoder(w).Encode([]map[string]any{{"sha": p.Head.SHA, "commit": map[string]string{"message": "fix: 本次需求"}}})
 		case strings.HasSuffix(r.URL.Path, ".diff"):
 			w.Write([]byte("diff"))
 		case strings.Contains(r.URL.Path, "/statuses/"):
@@ -435,6 +458,12 @@ func TestSharedHeadConflictClearsAndRepublishesWithoutReview(t *testing.T) {
 			json.NewEncoder(w).Encode(p)
 		case strings.Contains(r.URL.Path, "/branches/"):
 			json.NewEncoder(w).Encode(map[string]any{"commit": map[string]string{"id": p.Base.SHA}})
+		case strings.HasSuffix(r.URL.Path, "/pulls/1/commits"):
+			if r.URL.Query().Get("page") != "1" {
+				w.Write([]byte(`[]`))
+				return
+			}
+			json.NewEncoder(w).Encode([]map[string]any{{"sha": p.Head.SHA, "commit": map[string]string{"message": "fix: 本次需求"}}})
 		case strings.HasSuffix(r.URL.Path, ".diff"):
 			w.Write([]byte("diff"))
 		case strings.Contains(r.URL.Path, "/statuses/"):
@@ -500,7 +529,7 @@ func TestOutboxRetriesDuringPullListOutage(t *testing.T) {
 	defer s.Close()
 	nt := &fakeNotify{}
 	c := &Controller{Config: cfg, API: NewAPI(cfg, ""), Store: s, Notifier: nt}
-	r := &Run{Key: strings.Repeat("a", 64), Scope: c.scope(), PR: PR{Number: 1, User: User{ID: 9}}, ReportID: 7, ReportURL: "http://report", Status: "success", Result: &Result{Complete: true, Summary: "ok", Findings: []Finding{}}}
+	r := &Run{Key: strings.Repeat("a", 64), Scope: c.scope(), PR: PR{Number: 1, User: User{ID: 9}}, ReportID: 7, ReportURL: "http://report", Status: "success", Result: &Result{Verdict: "通过", Complete: true, Summary: "ok", Findings: []Finding{}}}
 	s.Runs[r.Key] = r
 	if e = s.Save(); e != nil {
 		t.Fatal(e)

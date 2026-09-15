@@ -122,3 +122,42 @@ type Comment struct {
 func (a *API) Status(ctx context.Context, p PR, state, target, key string) error {
 	return a.JSON(ctx, "POST", a.repo()+"/statuses/"+url.PathEscape(p.Head.SHA), map[string]string{"state": state, "context": StatusContext, "description": "Hermes review " + key[:12], "target_url": target}, nil)
 }
+
+// PullCommits collects the entire PR commit log, never silently truncating it.
+func (a *API) PullCommits(ctx context.Context, n int) ([]ReviewCommit, error) {
+	all := []ReviewCommit{}
+	seen := map[string]bool{}
+	totalBytes := 0
+	for page := 1; page <= 1001; page++ {
+		var batch []struct {
+			SHA    string `json:"sha"`
+			Commit struct {
+				Message string `json:"message"`
+			} `json:"commit"`
+		}
+		if e := a.JSON(ctx, "GET", fmt.Sprintf("%s/pulls/%d/commits?limit=50&page=%d", a.repo(), n, page), nil, &batch); e != nil {
+			return nil, e
+		}
+		if batch == nil {
+			return nil, errors.New("missing PR commit history")
+		}
+		for _, item := range batch {
+			if !shaPattern.MatchString(item.SHA) || strings.TrimSpace(item.Commit.Message) == "" || seen[item.SHA] {
+				return nil, errors.New("invalid or repeated PR commit history")
+			}
+			seen[item.SHA] = true
+			totalBytes += len(item.Commit.Message)
+			if totalBytes > 200000 || len(all) >= 1000 {
+				return nil, errors.New("PR commit history exceeds review limit")
+			}
+			all = append(all, ReviewCommit{SHA: item.SHA, Message: item.Commit.Message})
+		}
+		if len(batch) == 0 {
+			if len(all) == 0 {
+				return nil, errors.New("empty PR commit history")
+			}
+			return all, nil
+		}
+	}
+	return nil, errors.New("PR commit pagination limit")
+}

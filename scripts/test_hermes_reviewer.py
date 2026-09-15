@@ -9,7 +9,7 @@ import unittest
 
 SCRIPT = Path(__file__).with_name('hermes_reviewer.py')
 DIFF = 'diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n'
-GOOD = {'complete': True, 'summary': 'Reviewed changes.', 'findings': []}
+GOOD = {'complete': True, 'verdict': '通过', 'summary': '\n\n'.join('## '+section+'\n根据提交差异完成本节审查，待验证项无相关证据。' for section in ['评审范围','修改目标与实现分析','代码问题清单','跨仓影响范围','修改完整性评估','历史问题回归评估','构建与真机验证矩阵']), 'findings': []}
 FAKE = '''import os, json
 print('SECRET FROM LIBRARY')
 from hermes_cli.env_loader import load_hermes_dotenv
@@ -30,6 +30,8 @@ class AIAgent:
   self.valid_tool_names = set()
  def run_conversation(self, **kw):
   assert self.valid_tool_names == {'read_diff'}
+  assert 'Oasis 智能眼镜' in kw['system_message']
+  assert 'commit log' in kw['system_message']
   assert 'SECRET' not in kw['user_message']
   assert json.loads(handle_function_call('terminal', {'command':'id'}))['error']
   if READ:
@@ -58,7 +60,7 @@ class AdapterTests(unittest.TestCase):
    return subprocess.run([sys.executable, '-I', str(SCRIPT)], input=raw if raw is not None else json.dumps(value), capture_output=True, text=True, env=env, timeout=10)
  def test_success_isolated_exact_json(self):
   p=self.run_adapter(); self.assertEqual(p.returncode,0,p.stderr)
-  data=json.loads(p.stdout); self.assertTrue(data['complete']); self.assertIn('diff-only', data['summary']); self.assertEqual(p.stderr,'')
+  data=json.loads(p.stdout); self.assertTrue(data['complete']); self.assertIn('证据范围', data['summary']); self.assertEqual(p.stderr,'')
  def test_incomplete_agent_fails(self):
   p=self.run_adapter({'completed':False,'final_response':json.dumps(GOOD)}); self.assertNotEqual(p.returncode,0); self.assertFalse(json.loads(p.stdout)['complete'])
  def test_agent_error_fails_even_with_complete(self):
@@ -69,12 +71,12 @@ class AdapterTests(unittest.TestCase):
   for value in ['not json','```json\n'+json.dumps(GOOD)+'\n```', json.dumps({'complete':'true','summary':'x','findings':[]}), json.dumps({'complete':True,'findings':[]}), json.dumps(dict(GOOD,complete=False)),json.dumps(dict(GOOD,findings=[{'severity':'unknown'}]))]:
    with self.subTest(value=value): self.assertNotEqual(self.run_adapter({'completed':True,'final_response':value}).returncode,0)
  def test_invalid_findings_fail(self):
-  good={'severity':'high','file':'a.py','line':1,'title':'Issue','evidence':'x = 2','suggestion':'Fix'}
+  good={'severity':'high','file':'a.py','line':1,'title':'赋值问题','evidence':'赋值 x = 2 的影响','suggestion':'修复并验证返回值'}
   for change in [{'severity':'urgent'},{'line':True},{'line':100},{'file':'../../secret'},{'evidence':''}]:
-   output=dict(GOOD,findings=[dict(good,**change)])
+   output=dict(GOOD,verdict='不通过',findings=[dict(good,**change)])
    with self.subTest(change=change): self.assertNotEqual(self.run_adapter({'completed':True,'final_response':json.dumps(output)}).returncode,0)
  def test_valid_finding_passes(self):
-  output=dict(GOOD,findings=[{'severity':'high','file':'a.py','line':1,'title':'Issue','evidence':'x = 2','suggestion':'Fix'}])
+  output=dict(GOOD,verdict='不通过',findings=[{'severity':'high','file':'a.py','line':1,'title':'赋值问题','evidence':'赋值 x = 2 的影响','suggestion':'修复并验证返回值'}])
   self.assertEqual(self.run_adapter({'completed':True,'final_response':json.dumps(output)}).returncode,0)
  def test_oversized_input_fails(self):
   self.assertNotEqual(self.run_adapter(raw=' '*524289).returncode,0)

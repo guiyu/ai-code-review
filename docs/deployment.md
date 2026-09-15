@@ -4,13 +4,13 @@
 
 新门禁入口是 `cmd/review-gate`，不是原项目 `cmd/server`。原项目 Docker Compose 运行的是旧 Webhook 服务，不能提供新门禁。第一版通过内网主动查询 Gitea 开放 PR，不开放内网接收端口。
 
-出站连通性：Gitea REST/代码下载、飞书 OpenAPI、内网模型 API。Hermes 只接触当前评审的不可变 diff，不能执行被评审代码。第一版是 diff 范围的 Agent 评审，不宣称拥有全仓库上下文或完成动态测试；既有 CI 必须继续独立执行。
+出站连通性：Gitea REST/代码下载、飞书 OpenAPI、内网模型 API。Hermes 只接触当前评审的不可变 diff、PR 元数据和完整提交日志，不能执行被评审代码。第一版是 diff 范围的 Agent 评审，不宣称拥有全仓库上下文或完成动态测试；既有 CI 必须继续独立执行。
 
 ## 安装
 
 1. 使用 Go 1.24.2 或以上版本：`go build -o bin/review-gate ./cmd/review-gate`。
 2. 在 `/opt/hermes` 安装并固定经过验证的 Hermes 版本及 Python venv。参考 `docs/hermes-adapter.md` 的兼容性约束。
-3. 将本项目安装到 `/opt/ai-code-review`；复制 `examples/review-gate.json` 到 `/etc/ai-code-review/config.json`。
+3. 将本项目安装到 `/opt/ai-code-review`，包含 `scripts/` 和 `prompts/oasis-review.md`；复制 `examples/review-gate.json` 到 `/etc/ai-code-review/config.json`。
 4. 将 `examples/review.env.example` 复制为 `/etc/ai-code-review/review.env`，填入专用凭据并设置 0600。HTTP 是目标实例现有配置，迁移 HTTPS 后关闭 `allow_insecure_http`。
 5. 在 config 的 `identities` 中配置 `"Gitea数字用户ID": "飞书open_id"`。映射必须属于当前 Gitea 实例及当前飞书应用；不能按 commit author 邮箱盲猜。
 6. 创建无登录权限的 `code-review` 系统账号，创建 `/var/lib/ai-code-review` 并赋予其独占读写权限。其他安装文件保持只读。
