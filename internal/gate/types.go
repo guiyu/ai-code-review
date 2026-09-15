@@ -20,6 +20,7 @@ import (
 const StatusContext = "hermes-review"
 
 type Config struct {
+	MergeWhitelistUsernames []string          `json:"merge_whitelist_usernames,omitempty"`
 	FeishuWebhookKeywordEnv string            `json:"feishu_webhook_keyword_env"`
 	FeishuWebhookURLEnv     string            `json:"feishu_webhook_url_env"`
 	NotificationMode        string            `json:"notification_mode"`

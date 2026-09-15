@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -37,6 +38,18 @@ func contains(v []string, s string) bool {
 	}
 	return false
 }
+
+// MergeUsers always retains the controller and only adds explicitly configured users.
+func (c Config) MergeUsers() []string {
+	users := []string{c.BotUsername}
+	for _, user := range c.MergeWhitelistUsernames {
+		if user != "" && !contains(users, user) {
+			users = append(users, user)
+		}
+	}
+	sort.Strings(users)
+	return users
+}
 func (a *API) ProtectionPlan(existing map[string]any) map[string]any {
 	p := map[string]any{}
 	for k, v := range existing {
@@ -56,7 +69,7 @@ func (a *API) ProtectionPlan(existing map[string]any) map[string]any {
 	p["enable_force_push"] = false
 	p["enable_force_push_allowlist"] = false
 	p["enable_merge_whitelist"] = true
-	p["merge_whitelist_usernames"] = []string{a.Config.BotUsername}
+	p["merge_whitelist_usernames"] = a.Config.MergeUsers()
 	p["merge_whitelist_teams"] = []string{}
 	p["enable_status_check"] = true
 	p["block_on_outdated_branch"] = true
@@ -98,8 +111,10 @@ func (a *API) AuditProtection(ctx context.Context) error {
 	if v, _ := p["unprotected_file_patterns"].(string); v != "" {
 		return errors.New("unprotected file patterns bypass gate")
 	}
-	if !reflect.DeepEqual(stringsOf(p["merge_whitelist_usernames"]), []string{a.Config.BotUsername}) || len(stringsOf(p["merge_whitelist_teams"])) != 0 {
-		return errors.New("merge whitelist must contain only controller bot")
+	actualMergeUsers := append([]string(nil), stringsOf(p["merge_whitelist_usernames"])...)
+	sort.Strings(actualMergeUsers)
+	if !reflect.DeepEqual(actualMergeUsers, a.Config.MergeUsers()) || len(stringsOf(p["merge_whitelist_teams"])) != 0 {
+		return errors.New("merge whitelist differs from configured controller and authorized users")
 	}
 	if !contains(stringsOf(p["status_check_contexts"]), StatusContext) {
 		return errors.New("required Hermes check missing")
