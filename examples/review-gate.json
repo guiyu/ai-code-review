@@ -6,7 +6,7 @@
   "bot_username": "qianshou",
   "allow_insecure_http": true,
   "state_dir": "/var/lib/ai-code-review",
-  "policy_version": "oasis-v1",
+  "policy_version": "oasis-static-v2",
   "block_threshold": "high",
   "poll_seconds": 30,
   "review_timeout_seconds": 300,

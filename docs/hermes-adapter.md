@@ -1,3 +1,7 @@
+> 当前策略：`oasis-static-v2`。仅基于 PR 修改范围进行静态分析，报告正文为“修改概述 / 代码问题 / 待确认项”，目标 600 字以内。取消跨仓全量追踪、版本映射、历史故障清单、编译/构建/真机分析及验证矩阵。下文 `oasis-v1`、七章节与 16384 token 的记录属于此前部署历史，以本节为准。
+>
+> 根据全部 commit log 和完整 diff 推断修改目标；未提供关联仓库或编译结果不自动阻断，仅与改动判断直接相关的关键代码证据缺失时使用“证据不足”。已证实 P0/P1、无效报告、证据未读完仍禁止合入。只读工具、精确源码行号校验和飞书通知保留。Oasis 输出预算调整为 8192 token，评审超时上限暂保留，以免把缩短报告误实现为截断报告。
+
 # Hermes review adapter
 
 `scripts/hermes_reviewer.py` runs one isolated Hermes `AIAgent` conversation per invocation. It reads the controller's JSON request on stdin and writes exactly one JSON review object on stdout. Exit 0 means a structurally valid, complete review was returned; the explicit Chinese verdict and severity policy decide whether merge is allowed. Every exception, timeout, unsupported input, unread evidence range, invalid finding or incomplete response exits nonzero with `complete:false`.
@@ -102,3 +106,6 @@ Oasis 生产实例现显式配置 1200 秒适配器期限、1260 秒控制器期
 兼容模型额外生成的正式报告标题、首部评审结论和末尾合入建议，但七个正文章节仍必须完整有序。结构化 verdict 为“通过”时，额外结论/建议必须分别完整等于“通过”/“可以合入”；否定或附条件文本一律拒绝，禁止用子串匹配将“不能通过”误判为通过。
 
 可选诊断变量 `REVIEW_DIAGNOSTICS_DIR` 必须映射到 `reviewer_env` 且为绝对路径。默认关闭；开启时仅保存完成标记、结束原因和有界模型最终输出，不保存认证配置或完整对话。目录权限 0700、文件权限 0600。最终输出可能包含被评审代码，应仅写入本机忽略目录；诊断后清空该变量可关闭，保留映射以免改变评审键。
+
+
+章节兼容还接受标准标题后的括号状态附注（例如 `构建与真机验证矩阵（待执行）`），并将附注保留在章节正文；不删除未验证状态。模型输入新增 `allowed_finding_lines`，明确提供每个文件可引用的源码行号，区别于 `read_diff` 的全局差异索引。超出该映射的 finding 仍拒绝。

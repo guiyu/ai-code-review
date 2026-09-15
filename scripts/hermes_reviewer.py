@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 MAX_INPUT = 524288
 MAX_OUTPUT = 131072
-SCOPE = '证据范围：仅限远端 PR 差异与已提供的提交日志、元数据；未读取完整源码、关联仓库或本机未提交修改，未执行构建和真机测试。'
+SCOPE = '证据范围：仅对本次 PR 差异及提供的上下文做静态分析；通过仅代表该范围的静态评审通过。'
 
 
 class ReviewError(Exception):
@@ -202,26 +202,20 @@ class Evidence:
 
 
 TOOL = {'type': 'function', 'function': {'name': 'read_diff', 'description': 'Read an immutable range of the supplied unified diff. No filesystem access. Read every line before completing.', 'parameters': {'type': 'object', 'properties': {'start_line': {'type': 'integer', 'minimum': 1}, 'line_count': {'type': 'integer', 'minimum': 1, 'maximum': 200}}, 'required': ['start_line', 'line_count'], 'additionalProperties': False}}}
-REPORT_SECTIONS = ('评审范围', '修改目标与实现分析', '代码问题清单', '跨仓影响范围', '修改完整性评估', '历史问题回归评估', '构建与真机验证矩阵')
-RECOMMENDATIONS = {'通过': '可以合入', '有条件通过': '完成指定验证后合入', '不通过': '修复后重新评审', '证据不足': '拒绝合入'}
+REPORT_SECTIONS = ('修改概述', '代码问题', '待确认项')
+RECOMMENDATIONS = {'通过': '可以合入', '有条件通过': '补齐指定代码证据后重新评审', '不通过': '修复后重新评审', '证据不足': '拒绝合入'}
 PRIORITIES = {'critical': 'P0', 'high': 'P1', 'medium': 'P2', 'low': 'P3', 'info': '提示'}
 # Trusted deployment file, never read from PR-controlled source or model input.
 SYSTEM = Path(__file__).resolve().parent.parent.joinpath('prompts/oasis-review.md').read_text(encoding='utf-8') + """
 
-机器输出协议（必须遵守）：
-必须通过 read_diff 读取全部差异行。最终响应必须从 { 开始、以 } 结束，只返回一个合法 JSON 对象。禁止英文前言、思考过程、代码块、尾随说明及重复字段。findings 数组必须位于同一个对象内，每个问题是数组中的独立对象。不要把 findings 追加到已闭合对象之后：
-{"complete":true,"verdict":"通过|有条件通过|不通过|证据不足","summary":"七个章节的中文 Markdown 正文","findings":[{"severity":"critical|high|medium|low|info","file":"相对路径","line":1,"title":"中文问题标题","evidence":"中文：仓库、函数、触发条件、调用链、状态变化、后果、置信度、历史关联；缺失证据明确说明","suggestion":"中文修复建议及验证方法"}]}
-complete 表示已完成对可用证据的评审，不等同于具备完整跨仓证据或允许合入；证据不足也要返回 complete:true、verdict:证据不足和正式报告。
-summary 必须依次包含以下独立二级标题，且每节有中文内容：
-## 评审范围
-## 修改目标与实现分析
-## 代码问题清单
-## 跨仓影响范围
-## 修改完整性评估
-## 历史问题回归评估
-## 构建与真机验证矩阵
-报告总标题、评审结论、最高风险和最终合入建议由控制器根据 verdict/findings 确定性生成，请勿在 summary 另加这些章节或自行输出相反的合入建议。
-已证实的问题必须同时放入 findings，引用 diff 中实际出现的文件和行号；不要只在 summary 写阻断问题却留下空 findings。critical/high/medium/low 对应 P0/P1/P2/P3。存在 P0/P1 时不得给出“通过”。所有人类可读结论、证据和建议使用中文，保留代码符号、路径和机器枚举原文。不得把缺少证据编造成某个 diff 行的缺陷。
+输出协议：先用 read_diff 读取全部差异行；最终只返回单一合法 JSON，无前言、代码块、重复字段或尾随内容：
+{"complete":true,"verdict":"通过|有条件通过|不通过|证据不足","summary":"中文 Markdown 正文","findings":[{"severity":"critical|high|medium|low|info","file":"相对路径","line":1,"title":"中文标题","evidence":"触发条件、代码证据和后果","suggestion":"简短修复建议"}]}
+summary 依次包含三个二级标题，每节有中文正文：
+## 修改概述
+## 代码问题
+## 待确认项
+总标题、结论和合入建议由控制器生成。complete 表示可用证据评审已完成，证据不足也返回 true 和对应 verdict。
+findings 仅列已证实问题；file/line 必须在 allowed_finding_lines 内，line 是源码行号而非 read_diff 全局索引。未知位置的推测只放待确认项。P0/P1/P2/P3 对应 critical/high/medium/low；存在 P0/P1 不得通过。所有说明用中文。
 """
 
 
@@ -272,6 +266,7 @@ def run_agent(config, value, evidence):
                 agent.valid_tool_names = {'read_diff'}
                 metadata = {key: val for key, val in value.items() if key != 'diff'}
                 metadata['diff_line_count'] = len(evidence.lines)
+                metadata['allowed_finding_lines'] = {name: sorted(numbers) for name, numbers in parse_diff(value['diff'])[1].items()}
                 return agent.run_conversation(user_message=json.dumps(metadata), system_message=SYSTEM)
         finally:
             os.chdir(previous_cwd)
@@ -292,6 +287,17 @@ def normalize_report_sections(text, verdict):
         stated = re.findall('|'.join(RECOMMENDATIONS.values()), body)
         if (verdict == '通过' and body != '可以合入') or (verdict != '通过' and '可以合入' in stated):
             raise ReviewError('conflicting report conclusion')
+    # Keep parenthesized status notes as body evidence, never discard them.
+    normalized = []
+    for name, body in sections:
+        if not re.search(r'[\u4e00-\u9fff]', body):
+            raise ReviewError('report section must contain Chinese analysis')
+        match = re.fullmatch('(' + '|'.join(REPORT_SECTIONS) + r')\s*(（[^（）\n]+）|\([^()\n]+\))', name)
+        if match:
+            name, note = match.groups()
+            body = note + '\n' + body.strip()
+        normalized.append((name, body))
+    sections = normalized
     if [name for name, _ in sections] != list(REPORT_SECTIONS):
         raise ReviewError('missing or unordered report sections')
     return '\n\n'.join('## ' + name + '\n' + body.strip() for name, body in sections)
