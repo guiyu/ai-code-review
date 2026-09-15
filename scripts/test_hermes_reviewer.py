@@ -25,7 +25,15 @@ class AIAgent:
   assert kw['skip_memory'] and kw['skip_context_files']
   assert not kw['load_soul_identity'] and not kw['save_trajectories']
   assert kw['max_tokens'] == 8192
-  assert kw['request_overrides'] == {'response_format': {'type': 'json_object'}}
+  response_format=kw['request_overrides']['response_format']
+  assert response_format['type'] == 'json_schema'
+  assert response_format['json_schema']['strict'] is True
+  schema=response_format['json_schema']['schema']
+  assert schema['additionalProperties'] is False
+  assert schema['properties']['summary']['maxLength'] == 500
+  finding=schema['properties']['findings']['items']
+  assert finding['additionalProperties'] is False
+  assert finding['properties']['evidence']['maxLength'] == 180
   assert kw['api_key'] == 'test-key' and kw['model'] == 'test-model'
   self.tools = []
   self.valid_tool_names = set()
@@ -72,8 +80,14 @@ class AdapterTests(unittest.TestCase):
  def test_unread_diff_fails(self):
   self.assertNotEqual(self.run_adapter(read=False).returncode,0)
  def test_malformed_output_fails(self):
-  for value in ['not json','```json\n'+json.dumps(GOOD)+'\n```', json.dumps({'complete':'true','summary':'x','findings':[]}), json.dumps({'complete':True,'findings':[]}), json.dumps(dict(GOOD,complete=False)),json.dumps(dict(GOOD,findings=[{'severity':'unknown'}]))]:
+  for value in ['not json', json.dumps({'complete':'true','summary':'x','findings':[]}), json.dumps({'complete':True,'findings':[]}), json.dumps(dict(GOOD,complete=False)),json.dumps(dict(GOOD,findings=[{'severity':'unknown'}]))]:
    with self.subTest(value=value): self.assertNotEqual(self.run_adapter({'completed':True,'final_response':value}).returncode,0)
+ def test_exact_json_fence_is_accepted_without_surrounding_text(self):
+  fenced='```json\n'+json.dumps(GOOD)+'\n```'
+  self.assertEqual(self.run_adapter({'completed':True,'final_response':fenced}).returncode,0)
+  for value in ['评审如下：\n'+fenced, fenced+'\n补充说明']:
+   with self.subTest(value=value):
+    self.assertNotEqual(self.run_adapter({'completed':True,'final_response':value}).returncode,0)
  def test_invalid_findings_fail(self):
   good={'severity':'high','file':'a.py','line':1,'title':'赋值问题','evidence':'赋值 x = 2 的影响','suggestion':'修复并验证返回值'}
   for change in [{'severity':'urgent'},{'line':True},{'line':100},{'file':'../../secret'},{'evidence':''}]:
@@ -183,7 +197,9 @@ class InstalledHermesTests(unittest.TestCase):
    self.assertEqual(p.stderr, '')
    self.assertGreaterEqual(len(requests), 2)
    for request in requests:
-    self.assertEqual(request.get('response_format'), {'type': 'json_object'})
+    response_format=request.get('response_format')
+    self.assertEqual(response_format.get('type'),'json_schema')
+    self.assertTrue(response_format['json_schema']['strict'])
     self.assertEqual([t['function']['name'] for t in request.get('tools', [])], ['read_diff'])
    evidence = [m['content'] for request in requests for m in request['messages'] if m.get('role') == 'tool']
    self.assertTrue(any('+x = 2' in str(content) for content in evidence))

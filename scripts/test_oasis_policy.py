@@ -92,7 +92,7 @@ class OasisPolicyTests(unittest.TestCase):
 
  def test_oversized_finding_fields_are_rejected(self):
   base=dict(severity='high',file='a.py',line=1,title='赋值问题',evidence='赋值可能产生错误结果',suggestion='检查赋值逻辑')
-  for field, limit in {'title':30,'evidence':150,'suggestion':80}.items():
+  for field, limit in {'title':30,'evidence':180,'suggestion':80}.items():
    self.validate(verdict='不通过',findings=[dict(base,**{field:'中'*limit})])
    with self.subTest(field=field), self.assertRaises(adapter.ReviewError):
     self.validate(verdict='不通过',findings=[dict(base,**{field:'中'*(limit+1)})])
