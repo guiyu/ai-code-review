@@ -93,3 +93,12 @@ Controller 分页收集 PR 全部提交 SHA 和完整消息，获取失败、重
 超时有两层：适配器由 `REVIEW_TIMEOUT_SECONDS` 控制，默认 240 秒；控制器由 `review_timeout_seconds` 控制，默认 300 秒。提高适配器期限时必须在 `reviewer_env` 映射该变量，并让外层期限留有余量；只修改控制器期限不能消除适配器的 240 秒终止。
 
 Oasis 生产实例现显式配置 1200 秒适配器期限、1260 秒控制器期限、16384 输出 token。此为上限，不代表每次执行耗时；其他未映射这些环境变量的实例仍用适配器默认值。曾发生任一消息 length/content_filter 截断的结果仍拒绝放行，不因最终补写文本而忽略中间截断。
+
+
+模型调用通过 Hermes 的 `request_overrides` 设置 `response_format: {"type":"json_object"}`。部署模型端点必须支持该参数；本机端点已用独立小请求验证 HTTP 200 和合法 JSON。适配器仍严格解析单一 JSON，不截取前言后的对象、不修补重复字段，也不忽略尾随内容。
+
+输出失败进一步区分 `OUTPUT_JSON_SYNTAX`、`OUTPUT_DUPLICATE_KEYS`、`OUTPUT_SECTIONS`、`OUTPUT_LOCATION`、`OUTPUT_SUMMARY`、`OUTPUT_FINDING_SCHEMA`、`OUTPUT_LANGUAGE`、`EVIDENCE_INCOMPLETE`、`OUTPUT_SCHEMA`、`OUTPUT_SIZE` 和 `OUTPUT_VERDICT_CONFLICT`。自动重试日志保留这些受控原因。
+
+兼容模型额外生成的正式报告标题、首部评审结论和末尾合入建议，但七个正文章节仍必须完整有序。结构化 verdict 为“通过”时，额外结论/建议必须分别完整等于“通过”/“可以合入”；否定或附条件文本一律拒绝，禁止用子串匹配将“不能通过”误判为通过。
+
+可选诊断变量 `REVIEW_DIAGNOSTICS_DIR` 必须映射到 `reviewer_env` 且为绝对路径。默认关闭；开启时仅保存完成标记、结束原因和有界模型最终输出，不保存认证配置或完整对话。目录权限 0700、文件权限 0600。最终输出可能包含被评审代码，应仅写入本机忽略目录；诊断后清空该变量可关闭，保留映射以免改变评审键。

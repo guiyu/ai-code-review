@@ -175,6 +175,18 @@ type Notifier interface {
 }
 
 var reviewerFailureDescriptions = map[string]string{
+	"OUTPUT_DUPLICATE_KEYS":   "模型 JSON 含重复字段",
+	"OUTPUT_SECTIONS":         "模型报告章节缺失或顺序不符合协议",
+	"OUTPUT_LOCATION":         "问题引用的文件或行号不在已提供差异中",
+	"OUTPUT_SUMMARY":          "模型报告正文为空或超出长度限制",
+	"OUTPUT_FINDING_SCHEMA":   "模型问题条目字段不符合协议",
+	"OUTPUT_LANGUAGE":         "模型报告或问题条目未使用中文",
+	"EVIDENCE_INCOMPLETE":     "模型未读取完整差异证据",
+	"OUTPUT_JSON_SYNTAX":      "模型输出不是合法的单一 JSON 报告",
+	"OUTPUT_SCHEMA":           "模型评审结果字段不符合协议",
+	"OUTPUT_SIZE":             "模型响应超出长度限制",
+	"OUTPUT_VERDICT_CONFLICT": "通过结论与阻断级缺陷冲突",
+
 	"REVIEW_TIMEOUT":            "评审执行超时",
 	"INPUT_INVALID":             "评审输入无效或超出限制",
 	"CONFIG_INVALID":            "评审器配置无效",
@@ -224,7 +236,7 @@ func (s SubprocessReviewer) Review(ctx context.Context, in ReviewInput) (Result,
 	cmd := exec.CommandContext(ctx, c.ReviewerCommand[0], c.ReviewerCommand[1:]...)
 	cmd.Dir = home
 	cmd.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + home, "HERMES_HOME=" + filepath.Join(home, "hermes"), "LANG=C.UTF-8", "PYTHONNOUSERSITE=1"}
-	allowed := map[string]bool{"REVIEW_MODEL": true, "REVIEW_BASE_URL": true, "REVIEW_API_KEY": true, "REVIEW_HERMES_PATH": true, "REVIEW_MAX_INPUT_BYTES": true, "REVIEW_MAX_TOKENS": true, "REVIEW_MAX_ITERATIONS": true, "REVIEW_TIMEOUT_SECONDS": true}
+	allowed := map[string]bool{"REVIEW_MODEL": true, "REVIEW_BASE_URL": true, "REVIEW_API_KEY": true, "REVIEW_HERMES_PATH": true, "REVIEW_MAX_INPUT_BYTES": true, "REVIEW_MAX_TOKENS": true, "REVIEW_MAX_ITERATIONS": true, "REVIEW_TIMEOUT_SECONDS": true, "REVIEW_DIAGNOSTICS_DIR": true}
 	for child, parent := range c.ReviewerEnv {
 		if !allowed[child] {
 			return Result{}, fmt.Errorf("reviewer environment name not allowed: %s", child)

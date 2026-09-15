@@ -51,6 +51,9 @@ def configuration(env):
     source = Path(config['HERMES_PATH'])
     if not source.is_absolute() or not (source / 'run_agent.py').is_file():
         raise ReviewError('invalid Hermes source path')
+    config['DIAGNOSTICS_DIR'] = env.get('REVIEW_DIAGNOSTICS_DIR', '')
+    if config['DIAGNOSTICS_DIR'] and not Path(config['DIAGNOSTICS_DIR']).is_absolute():
+        raise ReviewError('diagnostics directory must be absolute')
     config['MAX_INPUT_BYTES'] = bounded_integer(env, 'REVIEW_MAX_INPUT_BYTES', MAX_INPUT, 1024, MAX_INPUT)
     config['MAX_TOKENS'] = bounded_integer(env, 'REVIEW_MAX_TOKENS', 8192, 1024, 16384)
     config['MAX_ITERATIONS'] = bounded_integer(env, 'REVIEW_MAX_ITERATIONS', 16, 2, 64)
@@ -206,7 +209,7 @@ PRIORITIES = {'critical': 'P0', 'high': 'P1', 'medium': 'P2', 'low': 'P3', 'info
 SYSTEM = Path(__file__).resolve().parent.parent.joinpath('prompts/oasis-review.md').read_text(encoding='utf-8') + """
 
 机器输出协议（必须遵守）：
-必须通过 read_diff 读取全部差异行。只返回一个 JSON 对象，不使用 JSON 代码块：
+必须通过 read_diff 读取全部差异行。最终响应必须从 { 开始、以 } 结束，只返回一个合法 JSON 对象。禁止英文前言、思考过程、代码块、尾随说明及重复字段。findings 数组必须位于同一个对象内，每个问题是数组中的独立对象。不要把 findings 追加到已闭合对象之后：
 {"complete":true,"verdict":"通过|有条件通过|不通过|证据不足","summary":"七个章节的中文 Markdown 正文","findings":[{"severity":"critical|high|medium|low|info","file":"相对路径","line":1,"title":"中文问题标题","evidence":"中文：仓库、函数、触发条件、调用链、状态变化、后果、置信度、历史关联；缺失证据明确说明","suggestion":"中文修复建议及验证方法"}]}
 complete 表示已完成对可用证据的评审，不等同于具备完整跨仓证据或允许合入；证据不足也要返回 complete:true、verdict:证据不足和正式报告。
 summary 必须依次包含以下独立二级标题，且每节有中文内容：
@@ -264,7 +267,7 @@ def run_agent(config, value, evidence):
                 module = importlib.import_module('run_agent')
                 # Deny dispatch independently of the tools advertised to the model.
                 module.handle_function_call = evidence.dispatch
-                agent = module.AIAgent(model=config['MODEL'], base_url=config['BASE_URL'], api_key=config['API_KEY'], provider='custom', api_mode='chat_completions', max_iterations=config['MAX_ITERATIONS'], max_tokens=config['MAX_TOKENS'], enabled_toolsets=[], skip_context_files=True, skip_memory=True, load_soul_identity=False, save_trajectories=False, verbose_logging=False, quiet_mode=True, checkpoints_enabled=False, fallback_model=None)
+                agent = module.AIAgent(model=config['MODEL'], base_url=config['BASE_URL'], api_key=config['API_KEY'], provider='custom', api_mode='chat_completions', max_iterations=config['MAX_ITERATIONS'], max_tokens=config['MAX_TOKENS'], enabled_toolsets=[], skip_context_files=True, skip_memory=True, load_soul_identity=False, save_trajectories=False, verbose_logging=False, quiet_mode=True, checkpoints_enabled=False, fallback_model=None, request_overrides={'response_format': {'type': 'json_object'}})
                 agent.tools = [TOOL]
                 agent.valid_tool_names = {'read_diff'}
                 metadata = {key: val for key, val in value.items() if key != 'diff'}
@@ -272,6 +275,26 @@ def run_agent(config, value, evidence):
                 return agent.run_conversation(user_message=json.dumps(metadata), system_message=SYSTEM)
         finally:
             os.chdir(previous_cwd)
+
+
+def normalize_report_sections(text, verdict):
+    pieces = re.split(r'^## (.+)$', text, flags=re.MULTILINE)
+    if pieces[0].strip() not in ('', '# Oasis 嵌入式代码评审报告'):
+        raise ReviewError('missing or unordered report sections')
+    sections = list(zip(pieces[1::2], pieces[2::2]))
+    if sections and sections[0][0] == '评审结论':
+        body = sections.pop(0)[1].strip()
+        stated = re.findall('有条件通过|不通过|证据不足|通过', body)
+        if (verdict == '通过' and body != '通过') or (verdict != '通过' and '通过' in stated):
+            raise ReviewError('conflicting report conclusion')
+    if sections and sections[-1][0] == '最终合入建议':
+        body = sections.pop()[1].strip()
+        stated = re.findall('|'.join(RECOMMENDATIONS.values()), body)
+        if (verdict == '通过' and body != '可以合入') or (verdict != '通过' and '可以合入' in stated):
+            raise ReviewError('conflicting report conclusion')
+    if [name for name, _ in sections] != list(REPORT_SECTIONS):
+        raise ReviewError('missing or unordered report sections')
+    return '\n\n'.join('## ' + name + '\n' + body.strip() for name, body in sections)
 
 
 def validate_completion(result):
@@ -298,9 +321,7 @@ def validate_output(result, evidence, locations):
         raise ReviewError('invalid summary')
     if output['verdict'] not in RECOMMENDATIONS:
         raise ReviewError('invalid verdict')
-    headings = re.findall(r'^## (.+)$', output['summary'], re.MULTILINE)
-    if headings != list(REPORT_SECTIONS):
-        raise ReviewError('missing or unordered report sections')
+    output['summary'] = normalize_report_sections(output['summary'], output['verdict'])
     for body in re.split(r'^## .+$', output['summary'], flags=re.MULTILINE)[1:]:
         if not re.search(r'[\u4e00-\u9fff]', body):
             raise ReviewError('report section must contain Chinese analysis')
@@ -329,6 +350,26 @@ def validate_output(result, evidence, locations):
     return output
 
 
+def record_diagnostics(config, value, result):
+    # Explicit operator opt-in. Do not persist API configuration, reasoning,
+    # library errors or the full conversation. Files contain review content.
+    if not config.get('DIAGNOSTICS_DIR') or not isinstance(result, dict):
+        return
+    try:
+        directory = Path(config['DIAGNOSTICS_DIR'])
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        raw = result.get('final_response')
+        record = {'completed': result.get('completed') is True,
+                  'agent_error': bool(result.get('error')),
+                  'finish_reasons': [m.get('finish_reason') for m in result.get('messages', []) if isinstance(m, dict)],
+                  'final_response': raw[:MAX_OUTPUT] if isinstance(raw, str) else None}
+        fd, name = tempfile.mkstemp(prefix='pr' + str(value['number']) + '-', suffix='.json', dir=directory)
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(record, stream, ensure_ascii=False)
+    except OSError:
+        pass  # Optional diagnostics must not change the review verdict.
+
+
 def main():
     failure_code = 'CONFIG_INVALID'
     try:
@@ -347,6 +388,7 @@ def main():
         signal.alarm(config['TIMEOUT_SECONDS'])
         failure_code = 'MODEL_EXECUTION_FAILED'
         result = run_agent(config, value, evidence)
+        record_diagnostics(config, value, result)
         validate_completion(result)
         failure_code = 'OUTPUT_INVALID'
         output = validate_output(result, evidence, locations)
@@ -359,6 +401,23 @@ def main():
             failure_code = 'REVIEW_TIMEOUT'
         elif isinstance(error, ReviewError) and str(error) == 'truncated or filtered response':
             failure_code = 'OUTPUT_TRUNCATED'
+        elif failure_code == 'OUTPUT_INVALID' and isinstance(error, json.JSONDecodeError):
+            failure_code = 'OUTPUT_JSON_SYNTAX'
+        elif failure_code == 'OUTPUT_INVALID' and isinstance(error, ReviewError):
+            failure_code = {
+                'duplicate JSON key': 'OUTPUT_DUPLICATE_KEYS',
+                'missing or unordered report sections': 'OUTPUT_SECTIONS',
+                'finding outside supplied diff': 'OUTPUT_LOCATION',
+                'invalid summary': 'OUTPUT_SUMMARY',
+                'invalid finding schema': 'OUTPUT_FINDING_SCHEMA',
+                'finding analysis must use Chinese': 'OUTPUT_LANGUAGE',
+                'report section must contain Chinese analysis': 'OUTPUT_LANGUAGE',
+                'incomplete diff coverage': 'EVIDENCE_INCOMPLETE',
+                'invalid review schema': 'OUTPUT_SCHEMA',
+                'invalid response size': 'OUTPUT_SIZE',
+                'passing verdict contradicts blocking findings': 'OUTPUT_VERDICT_CONFLICT',
+                'conflicting report conclusion': 'OUTPUT_VERDICT_CONFLICT',
+            }.get(str(error), 'OUTPUT_INVALID')
         # Never echo library exceptions, model output, endpoint, or input content.
         print(json.dumps({'complete': False, 'error_code': failure_code, 'summary': '评审执行失败，禁止合入。', 'findings': []}))
         return 1

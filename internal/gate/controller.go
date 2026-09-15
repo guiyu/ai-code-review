@@ -138,7 +138,7 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 		}
 	}
 	if r.Result == nil && r.ReviewError != "" && r.Attempts < 3 {
-		return errors.New("review failed; retry scheduled")
+		return fmt.Errorf("%s；已安排重试", r.ReviewError)
 	}
 	if e := c.API.Current(ctx, p); e != nil {
 		return e
