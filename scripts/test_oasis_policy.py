@@ -67,3 +67,8 @@ class OasisPolicyTests(unittest.TestCase):
    with self.subTest(body=body), self.assertRaises(adapter.ReviewError):
     summary = ('## '+heading+'\n'+body+'\n\n'+SUMMARY if heading == '评审结论' else SUMMARY+'\n\n## '+heading+'\n'+body)
     self.validate(verdict='通过', summary=summary)
+
+ def test_book_title_marks_are_accepted(self):
+  result=self.validate(summary='# 《Oasis 嵌入式代码评审报告》\n\n'+SUMMARY)
+  self.assertEqual(result['verdict'],'证据不足')
+  self.assertEqual(result['summary'].count('# Oasis 嵌入式代码评审报告'),1)
