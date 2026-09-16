@@ -12,6 +12,12 @@ SECTIONS = ['修改概述', '代码问题', '待确认项']
 SUMMARY = '\n\n'.join('## '+name+'\n证据不足：仅提供本次提交日志及差异，未提供关联仓库。' for name in SECTIONS)
 
 class OasisPolicyTests(unittest.TestCase):
+ def test_deployment_examples_forward_review_modes(self):
+  root=Path(__file__).resolve().parent.parent
+  for name in ['review-gate.json','review-gate-oasis.json']:
+   env=json.loads((root/'examples'/name).read_text())['reviewer_env']
+   for key in ['REVIEW_THINKING_MODE','REVIEW_RECHECK_DIFF']:
+    self.assertEqual(env.get(key),key,name)
  def test_missing_or_partial_evidence_still_rejected(self):
   lines,locations=adapter.parse_diff(DIFF)
   evidence=adapter.Evidence(lines)
@@ -45,8 +51,11 @@ class OasisPolicyTests(unittest.TestCase):
   self.assertEqual(result['verdict'], '证据不足')
   self.assertIn('# Oasis 嵌入式代码评审报告', result['summary'])
   self.assertIn('## 最终合入建议\n拒绝合入', result['summary'])
- def test_missing_sections_rejected(self):
-  with self.assertRaises(adapter.ReviewError): self.validate(summary='审查完成，没有问题')
+ def test_plain_chinese_summary_without_sections_is_accepted(self):
+  self.validate(summary='调整连接状态处理，未发现明确问题。')
+ def test_counts_and_code_do_not_require_chinese_in_every_field(self):
+  result=self.validate(verdict='不通过',summary='## 修改概述\n调整状态处理。\n## 代码问题\nP1: 1\n## 待确认项\n无',findings=[dict(severity='high',file='a.py',line=1,title='空指针访问',evidence='ptr = NULL; *ptr = 1;',suggestion='先检查指针')])
+  self.assertEqual(result['findings'][0]['evidence'],'ptr = NULL; *ptr = 1;')
  def test_unknown_verdict_rejected(self):
   with self.assertRaises(adapter.ReviewError): self.validate(verdict='随便合入')
  def test_commit_context_accepted(self):
@@ -106,7 +115,7 @@ class OasisPolicyTests(unittest.TestCase):
 
  def test_oversized_finding_fields_are_rejected(self):
   base=dict(severity='high',file='a.py',line=1,title='赋值问题',evidence='赋值可能产生错误结果',suggestion='检查赋值逻辑')
-  for field, limit in {'title':30,'evidence':180,'suggestion':80}.items():
+  for field, limit in {'title':80,'evidence':600,'suggestion':240}.items():
    self.validate(verdict='不通过',findings=[dict(base,**{field:'中'*limit})])
    with self.subTest(field=field), self.assertRaises(adapter.ReviewError):
     self.validate(verdict='不通过',findings=[dict(base,**{field:'中'*(limit+1)})])

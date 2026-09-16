@@ -87,6 +87,17 @@ func TestSubprocessPreservesSafeTimeoutReason(t *testing.T) {
 		t.Fatal("safe timeout reason lost", err)
 	}
 }
+func TestSubprocessForwardsReviewModesWithoutCredentials(t *testing.T) {
+	t.Setenv("REVIEW_THINKING_MODE", "disabled")
+	t.Setenv("REVIEW_RECHECK_DIFF", "false")
+	t.Setenv("GITEA_TOKEN", "must-not-reach-model")
+	cfg := DefaultConfig()
+	cfg.ReviewerEnv = map[string]string{"REVIEW_THINKING_MODE": "REVIEW_THINKING_MODE", "REVIEW_RECHECK_DIFF": "REVIEW_RECHECK_DIFF"}
+	cfg.ReviewerCommand = []string{"/bin/sh", "-c", `test "$REVIEW_THINKING_MODE" = disabled && test "$REVIEW_RECHECK_DIFF" = false && test -z "$GITEA_TOKEN" || exit 1; printf '{"complete":true,"verdict":"通过","summary":"中文短评","findings":[]}'`}
+	if _, err := (SubprocessReviewer{cfg}).Review(context.Background(), ReviewInput{}); err != nil {
+		t.Fatal(err)
+	}
+}
 func TestSubprocessDoesNotTrustArbitraryErrorText(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.ReviewerCommand = []string{"/bin/sh", "-c", `printf '{"complete":false,"error_code":"SECRET DO NOT LOG"}'; exit 1`}

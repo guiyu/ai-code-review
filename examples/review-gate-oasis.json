@@ -6,7 +6,7 @@
   "bot_username": "qianshou",
   "allow_insecure_http": true,
   "state_dir": "/var/lib/ai-code-review/oasis",
-  "policy_version": "oasis-static-v9",
+  "policy_version": "oasis-static-v11",
   "block_threshold": "high",
   "poll_seconds": 30,
   "review_timeout_seconds": 1260,
@@ -22,7 +22,9 @@
     "REVIEW_API_KEY": "REVIEW_API_KEY",
     "REVIEW_HERMES_PATH": "REVIEW_HERMES_PATH",
     "REVIEW_TIMEOUT_SECONDS": "REVIEW_TIMEOUT_SECONDS",
-    "REVIEW_MAX_TOKENS": "REVIEW_MAX_TOKENS"
+    "REVIEW_MAX_TOKENS": "REVIEW_MAX_TOKENS",
+    "REVIEW_THINKING_MODE": "REVIEW_THINKING_MODE",
+    "REVIEW_RECHECK_DIFF": "REVIEW_RECHECK_DIFF"
   },
   "identities": {},
   "feishu_app_id_env": "FEISHU_APP_ID",

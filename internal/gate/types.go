@@ -45,7 +45,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{FeishuWebhookKeywordEnv: "FEISHU_WEBHOOK_KEYWORD", FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-static-v9", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
+	return Config{FeishuWebhookKeywordEnv: "FEISHU_WEBHOOK_KEYWORD", FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-static-v11", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
 }
 func LoadConfig(path string) (Config, error) {
 	c := DefaultConfig()
@@ -238,7 +238,7 @@ func (s SubprocessReviewer) Review(ctx context.Context, in ReviewInput) (Result,
 	cmd := exec.CommandContext(ctx, c.ReviewerCommand[0], c.ReviewerCommand[1:]...)
 	cmd.Dir = home
 	cmd.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + home, "HERMES_HOME=" + filepath.Join(home, "hermes"), "LANG=C.UTF-8", "PYTHONNOUSERSITE=1"}
-	allowed := map[string]bool{"REVIEW_MODEL": true, "REVIEW_BASE_URL": true, "REVIEW_API_KEY": true, "REVIEW_HERMES_PATH": true, "REVIEW_MAX_INPUT_BYTES": true, "REVIEW_MAX_TOKENS": true, "REVIEW_MAX_ITERATIONS": true, "REVIEW_TIMEOUT_SECONDS": true, "REVIEW_DIAGNOSTICS_DIR": true}
+	allowed := map[string]bool{"REVIEW_MODEL": true, "REVIEW_BASE_URL": true, "REVIEW_API_KEY": true, "REVIEW_HERMES_PATH": true, "REVIEW_MAX_INPUT_BYTES": true, "REVIEW_MAX_TOKENS": true, "REVIEW_MAX_ITERATIONS": true, "REVIEW_TIMEOUT_SECONDS": true, "REVIEW_DIAGNOSTICS_DIR": true, "REVIEW_THINKING_MODE": true, "REVIEW_RECHECK_DIFF": true}
 	for child, parent := range c.ReviewerEnv {
 		if !allowed[child] {
 			return Result{}, fmt.Errorf("reviewer environment name not allowed: %s", child)

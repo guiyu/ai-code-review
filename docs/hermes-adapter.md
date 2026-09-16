@@ -1,3 +1,11 @@
+> 部署注意：REVIEW_THINKING_MODE 和 REVIEW_RECHECK_DIFF 必须同时加入 reviewer_env 映射与 Go SubprocessReviewer 白名单。已增加子进程回归测试验证传递，模型子进程仍不接收 Gitea Token。
+
+> 当前部署 oasis-static-v11：在 v10 精简报告基础上设置 REVIEW_RECHECK_DIFF=false，不向模型提供工具，完整diff首条输入直接评审；REVIEW_MAX_TOKENS恢复16384作为内部余量（4K曾导致中间响应截断），REVIEW_THINKING_MODE=disabled保留。输出仍要求40–80字摘要及简短问题清单。
+
+> v10 格式兼容：带前言的唯一 JSON 代码块仅在 verdict 为有条件通过/不通过/证据不足时可展示，仍逐项校验且禁止合入；通过结论不允许此前言兼容路径，多代码块和尾随内容仍拒绝。
+
+> 当前策略 oasis-static-v10：仅做 diff 直接风险静态分析，摘要1–2句、目标40–80字；问题约20/100/50字（标题/证据/建议）。校验容错上限为80/600/240字符，不截断问题。允许风险数量和代码原文，中文按完整说明检查。部署设置 REVIEW_THINKING_MODE=disabled、REVIEW_MAX_TOKENS=4096；其他模型默认不发送 thinking 参数。保留完整 diff 首次交付和安全门禁。以下旧版本说明仅供历史参考。
+
 > v9 修复证据分页依赖：完整校验后的 diff 随首条用户输入发送，read_diff 仅用于复查；模型无需自行分页才能收到全部差异。覆盖率仅表示证据交付，不证明模型理解。保留 v8 短摘要及全部安全校验。
 
 > v8 摘要进一步缩短：目标 80–120 字，提示最多 180 字符；修改概述一句、代码问题只计数、待确认项最多两条。问题证据保留在 findings；500 字校验容错上限及 16384 token 分析预算不变。
@@ -80,7 +88,7 @@ Run the optional real installed-Hermes integration using its Python interpreter 
 TEST_HERMES_SOURCE=/opt/hermes /opt/hermes/venv/bin/python -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-Verification on 2026-09-16: the current full suite contains 46 tests. With installed Hermes configured, all 46 pass; without that opt-in configuration, 44 pass and two integration tests are skipped. Tests cover isolation, tool restrictions, strict JSON, bounded code-fence compatibility, length/count boundaries, secret suppression, input/diff validation, evidence coverage, findings, verdict consistency and completion truncation. Both real-Hermes mock integration cases verify that the first model request contains the full diff, including changes beyond line 200: one returns immediately without tool calls, and one rechecks a range using `read_diff` before returning a report.
+Verification on 2026-09-16: the current full suite contains 49 tests. With installed Hermes configured, all 49 pass; without that opt-in configuration, 47 pass and two integration tests are skipped. Tests cover isolation, tool restrictions, strict JSON, bounded code-fence compatibility, length/count boundaries, secret suppression, input/diff validation, evidence coverage, findings, verdict consistency and completion truncation. Both real-Hermes mock integration cases verify that the first model request contains the full diff, including changes beyond line 200: one returns immediately without tool calls, and one rechecks a range using `read_diff` before returning a report.
 
 An authorized live smoke also passed against the configured private model API using only an artificial six-line diff: adapter exit 0, valid JSON, `complete:true`, zero findings, diff-only scope present and empty stderr. Credentials were loaded from existing local Hermes configuration into dedicated child configuration without printing them. No real repository content, Gitea writes or Feishu messages were involved. This verifies basic private-model compatibility, not model review quality.
 

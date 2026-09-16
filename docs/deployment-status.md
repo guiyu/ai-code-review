@@ -1,3 +1,11 @@
+> 2026-09-16 v11 实际验证：PR #591（head 65a1a61197ec / base 32bb7b3444f9）生成有效中文报告 #issuecomment-3300，verdict=有条件通过，P2/P3各一项，ReviewError为空、Notified=true、NotifyError为空。模型本次仅stop结束、无工具调用或length标记。failure表示评审结论阻断，非执行error；未合并PR。49项Python测试及Go门禁/飞书测试通过。
+
+> 部署注意：REVIEW_THINKING_MODE 和 REVIEW_RECHECK_DIFF 必须同时加入 reviewer_env 映射与 Go SubprocessReviewer 白名单。已增加子进程回归测试验证传递，模型子进程仍不接收 Gitea Token。
+
+> 当前部署 oasis-static-v11：在 v10 精简报告基础上设置 REVIEW_RECHECK_DIFF=false，不向模型提供工具，完整diff首条输入直接评审；REVIEW_MAX_TOKENS恢复16384作为内部余量（4K曾导致中间响应截断），REVIEW_THINKING_MODE=disabled保留。输出仍要求40–80字摘要及简短问题清单。
+
+> 当前策略 oasis-static-v10：仅做 diff 直接风险静态分析，摘要1–2句、目标40–80字；问题约20/100/50字（标题/证据/建议）。校验容错上限为80/600/240字符，不截断问题。允许风险数量和代码原文，中文按完整说明检查。部署设置 REVIEW_THINKING_MODE=disabled、REVIEW_MAX_TOKENS=4096；其他模型默认不发送 thinking 参数。保留完整 diff 首次交付和安全门禁。以下旧版本说明仅供历史参考。
+
 > v9 修复证据分页依赖：完整校验后的 diff 随首条用户输入发送，read_diff 仅用于复查；模型无需自行分页才能收到全部差异。覆盖率仅表示证据交付，不证明模型理解。保留 v8 短摘要及全部安全校验。
 
 > v8 摘要进一步缩短：目标 80–120 字，提示最多 180 字符；修改概述一句、代码问题只计数、待确认项最多两条。问题证据保留在 findings；500 字校验容错上限及 16384 token 分析预算不变。

@@ -34,7 +34,7 @@ class AIAgent:
   assert schema['properties']['summary']['maxLength'] == 500
   finding=schema['properties']['findings']['items']
   assert finding['additionalProperties'] is False
-  assert finding['properties']['evidence']['maxLength'] == 180
+  assert finding['properties']['evidence']['maxLength'] == 600
   assert kw['api_key'] == 'test-key' and kw['model'] == 'test-model'
   self.tools = []
   self.valid_tool_names = set()
@@ -95,6 +95,13 @@ class AdapterTests(unittest.TestCase):
   for value in ['评审如下：\n'+fenced, fenced+'\n补充说明']:
    with self.subTest(value=value):
     self.assertNotEqual(self.run_adapter({'completed':True,'final_response':value}).returncode,0)
+ def test_prefaced_json_can_only_publish_a_blocking_verdict(self):
+  blocked='```json\n'+json.dumps(dict(GOOD,verdict='有条件通过'))+'\n```'
+  p=self.run_adapter({'completed':True,'final_response':'Review follows.\n'+blocked})
+  self.assertEqual(p.returncode,0,p.stdout)
+  self.assertEqual(json.loads(p.stdout)['verdict'],'有条件通过')
+  for raw in [blocked+'\nextra',blocked+'\n'+blocked]:
+   self.assertNotEqual(self.run_adapter({'completed':True,'final_response':raw}).returncode,0)
  def test_invalid_findings_fail(self):
   good={'severity':'high','file':'a.py','line':1,'title':'赋值问题','evidence':'赋值 x = 2 的影响','suggestion':'修复并验证返回值'}
   for change in [{'severity':'urgent'},{'line':True},{'line':100},{'file':'../../secret'},{'evidence':''}]:
@@ -150,9 +157,9 @@ class AdapterTests(unittest.TestCase):
     self.assertNotEqual(p.returncode,0)
     self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_JSON_SYNTAX')
 
- def test_section_failure_has_specific_code(self):
-  p=self.run_adapter({'completed':True,'final_response':json.dumps(dict(GOOD,summary='中文报告缺少章节'))})
-  self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_SECTIONS')
+ def test_english_only_summary_fails_with_specific_code(self):
+  p=self.run_adapter({'completed':True,'final_response':json.dumps(dict(GOOD,summary='No issues found'))})
+  self.assertEqual(json.loads(p.stdout).get('error_code'),'OUTPUT_LANGUAGE')
 
  def test_opt_in_diagnostics_exclude_credentials(self):
   with tempfile.TemporaryDirectory() as td:
@@ -200,7 +207,7 @@ class InstalledHermesTests(unittest.TestCase):
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
   try:
-   env = dict(os.environ, REVIEW_HERMES_PATH=os.environ['TEST_HERMES_SOURCE'], REVIEW_MODEL='test-model', REVIEW_BASE_URL='http://127.0.0.1:'+str(server.server_port)+'/v1', REVIEW_API_KEY='dummy-only', REVIEW_TIMEOUT_SECONDS='60')
+   env = dict(os.environ, REVIEW_HERMES_PATH=os.environ['TEST_HERMES_SOURCE'], REVIEW_MODEL='test-model', REVIEW_BASE_URL='http://127.0.0.1:'+str(server.server_port)+'/v1', REVIEW_API_KEY='dummy-only', REVIEW_TIMEOUT_SECONDS='60', REVIEW_THINKING_MODE='disabled', REVIEW_RECHECK_DIFF='false' if direct else 'true')
    payload = {'repository':'test/repo','number':1,'head_sha':'a'*40,'base_sha':'b'*40,'title':'synthetic fixture','diff':LONG_DIFF}
    p = subprocess.run([sys.executable, '-I', str(SCRIPT)], input=json.dumps(payload), text=True, capture_output=True, env=env, timeout=75)
    self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
@@ -213,7 +220,8 @@ class InstalledHermesTests(unittest.TestCase):
     response_format=request.get('response_format')
     self.assertEqual(response_format.get('type'),'json_schema')
     self.assertTrue(response_format['json_schema']['strict'])
-    self.assertEqual([t['function']['name'] for t in request.get('tools', [])], ['read_diff'])
+    self.assertEqual(request.get('thinking'),{'type':'disabled'})
+    self.assertEqual([t['function']['name'] for t in request.get('tools', [])], [] if direct else ['read_diff'])
    evidence = [m['content'] for request in requests for m in request['messages'] if m.get('role') == 'tool']
    if direct:
     self.assertEqual(evidence,[])
