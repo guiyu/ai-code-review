@@ -1,8 +1,10 @@
+> v8 摘要进一步缩短：目标 80–120 字，提示最多 180 字符；修改概述一句、代码问题只计数、待确认项最多两条。问题证据保留在 findings；500 字校验容错上限及 16384 token 分析预算不变。
+
 > 权限更新：评审实例启用 `review_only`，qianshou 从受管分支合并白名单移除，本地 merge 命令在发起 API 请求前拒绝。Oasis 分支仅保留 halliday、qingye；检查状态、报告和通知继续由 qianshou 发布。
 
 > 合并权限更新：`qingyun/oasis_glasses` 的 `dev_oasis` 合并白名单增加 `halliday`、`qingye`，保留 `qianshou`；人工审批、hermes-review、过期分支阻断和禁止直接推送保持原值。本地配置 `merge_whitelist_usernames` 指定额外合并人员，控制器始终保留自身账号并核对完整名单。
 
-> 最新策略 `oasis-static-v7`：沿用短报告硬边界和 16384 token 生成余量，并请求严格 JSON Schema。内网模型兼容性测试显示其仍可能返回唯一的 `json` 代码块，因此适配器仅兼容“整个响应恰好是一个 JSON 代码块”的形式；带前言、尾随文字、多个代码块或重复字段仍拒绝。
+> 最新策略 `oasis-static-v8`：沿用短报告硬边界和 16384 token 生成余量，并请求严格 JSON Schema。内网模型兼容性测试显示其仍可能返回唯一的 `json` 代码块，因此适配器仅兼容“整个响应恰好是一个 JSON 代码块”的形式；带前言、尾随文字、多个代码块或重复字段仍拒绝。
 
 > 根据全部 commit log 和完整 diff 推断修改目标；未提供关联仓库或编译结果不自动阻断，仅与改动判断直接相关的关键代码证据缺失时使用“证据不足”。已证实 P0/P1、无效报告、证据未读完仍禁止合入。只读工具、精确源码行号校验和飞书通知保留。Oasis 模型生成预算为 16384 token，最终报告长度由独立硬边界限制。
 
@@ -55,7 +57,7 @@ launchctl bootstrap gui/$(id -u) .runtime/com.halliday.hermes-review-gate.plist
 
 ## Oasis 默认评审策略
 
-本地两个服务使用 `policy_version=oasis-static-v7`。每次自动 PR 评审固定加载 `prompts/oasis-review.md`，采集完整提交日志及 PR 说明；缺需求描述时根据 commit log 和 diff 推断。输出压缩后的“修改概述 / 代码问题 / 待确认项”三节中文正文，并由控制器生成结论及合入建议。仅“通过”且缺陷等级低于门限可进入合入检查；“有条件通过／不通过／证据不足”均阻断。
+本地两个服务使用 `policy_version=oasis-static-v8`。每次自动 PR 评审固定加载 `prompts/oasis-review.md`，采集完整提交日志及 PR 说明；缺需求描述时根据 commit log 和 diff 推断。输出压缩后的“修改概述 / 代码问题 / 待确认项”三节中文正文，并由控制器生成结论及合入建议。仅“通过”且缺陷等级低于门限可进入合入检查；“有条件通过／不通过／证据不足”均阻断。
 
 当前取证仍限远端 PR diff、提交日志及元数据，不具备全仓 git show/blame 或跨仓源码读取能力；缺少必要证据必须在报告中明确说明。没有将本机 Oasis 未提交修改混入测试仓库的 PR。
 

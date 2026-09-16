@@ -218,7 +218,8 @@ REVIEW_SCHEMA = {
     'properties': {
         'complete': {'type': 'boolean', 'enum': [True]},
         'verdict': {'type': 'string', 'enum': list(RECOMMENDATIONS)},
-        'summary': {'type': 'string', 'minLength': 1, 'maxLength': MAX_SUMMARY_CHARS},
+        'summary': {'type': 'string', 'minLength': 1, 'maxLength': MAX_SUMMARY_CHARS,
+                    'description': '三节中文短摘要，目标80–120字，含标题换行最多180字符。只写修改概述、问题数量、最多2条待确认项；问题详情放findings。'},
         'findings': {
             'type': 'array', 'maxItems': 100,
             'items': {
@@ -244,10 +245,14 @@ SYSTEM = Path(__file__).resolve().parent.parent.joinpath('prompts/oasis-review.m
 
 输出协议：先用 read_diff 读取全部差异行；最终只返回单一合法 JSON，无前言、代码块、重复字段或尾随内容：
 {"complete":true,"verdict":"通过|有条件通过|不通过|证据不足","summary":"中文 Markdown 正文","findings":[{"severity":"critical|high|medium|low|info","file":"相对路径","line":1,"title":"中文标题","evidence":"触发条件、代码证据和后果","suggestion":"简短修复建议"}]}
-summary 依次包含三个二级标题，每节有中文正文：
+summary 使用以下短格式（内容按实际证据填写，不得照抄结论）：
 ## 修改概述
+一句话说明修改目的。
 ## 代码问题
+未发现明确问题（有问题时只写P0/P1/P2/P3数量）。
 ## 待确认项
+无（有待确认项时最多两条短句）。
+summary 目标80–120字，含标题、标点和换行最多180字符；不要重复findings、输出检查过程或添加其他章节。
 总标题、结论和合入建议由控制器生成。complete 表示可用证据评审已完成，证据不足也返回 true 和对应 verdict。
 findings 仅列已证实问题；file/line 必须在 allowed_finding_lines 内，line 是源码行号而非 read_diff 全局索引。未知位置的推测只放待确认项。P0/P1/P2/P3 对应 critical/high/medium/low；存在 P0/P1 不得通过。所有 P0/P1 必须保留；medium/low/info 合并同类后合计最多 5 条。title 不超过 30 字，evidence 不超过 180 字，suggestion 不超过 80 字。所有说明用中文。
 """
