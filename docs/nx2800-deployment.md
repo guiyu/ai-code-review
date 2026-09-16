@@ -26,3 +26,5 @@ launchctl print gui/$(id -u)/com.halliday.hermes-review-gate-nx2800
 `once`、`retry` 等需要状态锁的手动命令，必须先停止此实例再执行，并在完成后恢复服务。不要操作另外两个实例的状态目录。
 
 2026-09-16 通知地址已独立配置：本实例读取 `FEISHU_WEBHOOK_URL_NX2800`（仅保存在本机私有环境文件），其他实例继续使用原变量。已发送包含 `codereview` 的测试消息，飞书返回 code=0；服务已重启生效。
+
+2026-09-16 通知统一修正：Oasis PR #593 的通知因旧地址投递失败；共享 `FEISHU_WEBHOOK_URL` 已更新为用户指定的新群机器人地址，与 NX2800 当前目的地一致。服务自动补发后 `Notified=true`、`NotifyError` 为空。飞书接受记录代表接口确认接收，不代表群成员已读。独立变量仍保留，便于后续按仓库调整。
