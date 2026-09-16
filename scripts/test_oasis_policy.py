@@ -12,6 +12,20 @@ SECTIONS = ['修改概述', '代码问题', '待确认项']
 SUMMARY = '\n\n'.join('## '+name+'\n证据不足：仅提供本次提交日志及差异，未提供关联仓库。' for name in SECTIONS)
 
 class OasisPolicyTests(unittest.TestCase):
+ def test_missing_or_partial_evidence_still_rejected(self):
+  lines,locations=adapter.parse_diff(DIFF)
+  evidence=adapter.Evidence(lines)
+  result={'completed':True,'final_response':json.dumps(dict(complete=True,verdict='通过',summary=SUMMARY,findings=[]))}
+  for count in [0,1]:
+   if count: evidence.dispatch('read_diff',{'start_line':1,'line_count':count})
+   with self.assertRaisesRegex(adapter.ReviewError,'incomplete diff coverage'):
+    adapter.validate_output(result,evidence,locations)
+ def test_inline_delivery_must_match_validated_diff(self):
+  evidence=adapter.Evidence(DIFF.splitlines())
+  with self.assertRaises(adapter.ReviewError): evidence.record_inline_delivery(DIFF+'extra')
+  self.assertFalse(evidence.supplied_inline)
+  evidence.record_inline_delivery(DIFF)
+  self.assertTrue(evidence.supplied_inline)
  def validate(self, **updates):
   lines, locations = adapter.parse_diff(DIFF)
   evidence = adapter.Evidence(lines)

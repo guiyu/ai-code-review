@@ -1,6 +1,8 @@
+> v9 修复证据分页依赖：完整校验后的 diff 随首条用户输入发送，read_diff 仅用于复查；模型无需自行分页才能收到全部差异。覆盖率仅表示证据交付，不证明模型理解。保留 v8 短摘要及全部安全校验。
+
 > v8 摘要进一步缩短：目标 80–120 字，提示最多 180 字符；修改概述一句、代码问题只计数、待确认项最多两条。问题证据保留在 findings；500 字校验容错上限及 16384 token 分析预算不变。
 
-> 最新策略 `oasis-static-v8`：沿用短报告硬边界和 16384 token 生成余量，并请求严格 JSON Schema。内网模型兼容性测试显示其仍可能返回唯一的 `json` 代码块，因此适配器仅兼容“整个响应恰好是一个 JSON 代码块”的形式；带前言、尾随文字、多个代码块或重复字段仍拒绝。
+> 最新策略 `oasis-static-v9`：沿用短报告硬边界和 16384 token 生成余量，并请求严格 JSON Schema。内网模型兼容性测试显示其仍可能返回唯一的 `json` 代码块，因此适配器仅兼容“整个响应恰好是一个 JSON 代码块”的形式；带前言、尾随文字、多个代码块或重复字段仍拒绝。
 
 > 根据全部 commit log 和完整 diff 推断修改目标；未提供关联仓库或编译结果不自动阻断，仅与改动判断直接相关的关键代码证据缺失时使用“证据不足”。已证实 P0/P1、无效报告、证据未读完仍禁止合入。只读工具、精确源码行号校验和飞书通知保留。Oasis 模型生成预算为 16384 token，最终报告长度由独立硬边界限制。
 
@@ -31,7 +33,7 @@ Optional limits:
 
 | Variable | Default | Accepted range |
 | --- | --- | --- |
-| `REVIEW_MAX_INPUT_BYTES` | 524288 | 1024–524288 |
+| `REVIEW_MAX_INPUT_BYTES` | 524688 | 1024–524688 |
 | `REVIEW_MAX_TOKENS` | 8192 | 1024–16384 response tokens per model request |
 | `REVIEW_MAX_ITERATIONS` | 16 | 2–64 Hermes iterations |
 | `REVIEW_TIMEOUT_SECONDS` | 240 | 1–1800 seconds |
@@ -42,7 +44,7 @@ The controller should also enforce a subprocess deadline and bounded stdout. Inp
 
 Before importing Hermes, the adapter replaces the entire environment with a small fixed set and creates a fresh private temporary `HOME`, `HERMES_HOME`, `HERMES_MANAGED_DIR`, XDG directories and working directory. Explicit model configuration is held in memory and passed to the constructor. The adapter disables Hermes's dotenv loader before importing `run_agent`: that loader otherwise reads the source checkout's `.env` and external/managed credential sources, even with a temporary home.
 
-Personal memories, context files, SOUL identity, trajectory saving and checkpoints are disabled. No configured toolsets are enabled. The sole advertised tool is `read_diff(start_line, line_count)`, returning at most 200 immutable stdin diff lines per call. The dispatch boundary rejects every other tool name independently of model instructions. All supplied lines must have been returned through this tool before a complete result is accepted. Diff text and PR metadata are explicitly treated as untrusted evidence. No repository checkout, arbitrary file read, shell, network lookup, code execution, browser, skill or delegation tool is exposed to the model.
+Personal memories, context files, SOUL identity, trajectory saving and checkpoints are disabled. No configured toolsets are enabled. The sole advertised tool is `read_diff(start_line, line_count)`, returning at most 200 immutable stdin diff lines per call. The dispatch boundary rejects every other tool name independently of model instructions. The full validated diff is supplied in the initial user JSON. Coverage accepts this exact complete input or a complete set of tool reads; it measures evidence delivery, not proof of model cognition. Models may finish without redundant tool calls. No diff is silently shortened to fit the context; context errors and truncated responses still fail closed. Diff text and PR metadata are explicitly treated as untrusted evidence. No repository checkout, arbitrary file read, shell, network lookup, code execution, browser, skill or delegation tool is exposed to the model.
 
 This is application-level tool isolation, not an operating-system sandbox for the trusted Hermes dependency itself. Deploy under a dedicated unprivileged account/container without personal home or Gitea/Feishu secret mounts, with read-only application/Hermes files, a writable temporary directory and network egress limited to the private model endpoint. Do not expose this service to PR-controlled command, environment or dependency changes. HTTP endpoints are accepted for explicitly configured private services; use TLS where required by the deployment.
 
@@ -78,7 +80,7 @@ Run the optional real installed-Hermes integration using its Python interpreter 
 TEST_HERMES_SOURCE=/opt/hermes /opt/hermes/venv/bin/python -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-Verification on 2026-09-15: the current full suite contains 42 tests. With installed Hermes configured, all 42 pass, including an actual streamed model tool-call loop against the localhost mock; without that opt-in configuration, 41 pass and the integration test is skipped. Tests cover isolation, tool restrictions, strict JSON, bounded code-fence compatibility, length/count boundaries, secret suppression, input/diff validation, evidence coverage, findings, verdict consistency and completion truncation. The mock integration observed `read_diff`, its supplied diff result, and a valid final JSON response.
+Verification on 2026-09-16: the current full suite contains 46 tests. With installed Hermes configured, all 46 pass; without that opt-in configuration, 44 pass and two integration tests are skipped. Tests cover isolation, tool restrictions, strict JSON, bounded code-fence compatibility, length/count boundaries, secret suppression, input/diff validation, evidence coverage, findings, verdict consistency and completion truncation. Both real-Hermes mock integration cases verify that the first model request contains the full diff, including changes beyond line 200: one returns immediately without tool calls, and one rechecks a range using `read_diff` before returning a report.
 
 An authorized live smoke also passed against the configured private model API using only an artificial six-line diff: adapter exit 0, valid JSON, `complete:true`, zero findings, diff-only scope present and empty stderr. Credentials were loaded from existing local Hermes configuration into dedicated child configuration without printing them. No real repository content, Gitea writes or Feishu messages were involved. This verifies basic private-model compatibility, not model review quality.
 
@@ -90,7 +92,7 @@ Controller 分页收集 PR 全部提交 SHA 和完整消息，获取失败、重
 
 模型返回“修改概述 / 代码问题 / 待确认项”三个中文正文章节；适配器验证章节顺序及中文内容，再确定性生成总标题、评审结论、最高已证实风险等级和最终合入建议。P0/P1/P2/P3 分别对应 critical/high/medium/low。有条件通过保持阻断，需补齐指定代码证据后重新评审。
 
-提示词与适配器均是部署文件，必须一起安装；调整提示词、输出协议或模型生成预算时同步升级 `policy_version`，旧结论不会作为新策略下的合入凭据。当前默认策略为 `oasis-static-v8`。修改 PR 说明本身不自动触发重新评审；需新提交或升级策略版本。
+提示词与适配器均是部署文件，必须一起安装；调整提示词、输出协议或模型生成预算时同步升级 `policy_version`，旧结论不会作为新策略下的合入凭据。当前默认策略为 `oasis-static-v9`。修改 PR 说明本身不自动触发重新评审；需新提交或升级策略版本。
 
 ## 安全失败诊断
 

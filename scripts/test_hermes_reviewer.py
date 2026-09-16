@@ -9,6 +9,7 @@ import unittest
 
 SCRIPT = Path(__file__).with_name('hermes_reviewer.py')
 DIFF = 'diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n'
+LONG_DIFF = DIFF + 'diff --git a/b.py b/b.py\n--- a/b.py\n+++ b/b.py\n@@ -1,310 +1,310 @@\n' + ' context\n'*309 + '-old_tail\n+new_tail\n'
 GOOD = {'complete': True, 'verdict': '通过', 'summary': '\n\n'.join('## '+section+'\n根据提交差异完成本节审查，待验证项无相关证据。' for section in ['修改概述','代码问题','待确认项']), 'findings': []}
 FAKE = '''import os, json
 print('SECRET FROM LIBRARY')
@@ -43,6 +44,7 @@ class AIAgent:
   assert 'commit log' in kw['system_message']
   assert 'SECRET' not in kw['user_message']
   assert json.loads(kw['user_message'])['allowed_finding_lines']['a.py'] == [1]
+  assert json.loads(kw['user_message'])['diff'] == EXPECTED_DIFF
   assert json.loads(handle_function_call('terminal', {'command':'id'}))['error']
   if READ:
    data = json.loads(handle_function_call('read_diff', {'start_line':1, 'line_count':200}))
@@ -59,7 +61,7 @@ class AdapterTests(unittest.TestCase):
  def run_adapter(self, result=None, payload=None, read=True, extra=None, raw=None):
   with tempfile.TemporaryDirectory() as td:
    root = Path(td)
-   (root / 'run_agent.py').write_text('READ = '+repr(read)+'\nRESULT = '+repr(result if result is not None else {'completed':True, 'final_response':json.dumps(GOOD)})+'\n'+FAKE)
+   (root / 'run_agent.py').write_text('EXPECTED_DIFF = '+repr((payload or {}).get('diff', DIFF))+'\nREAD = '+repr(read)+'\nRESULT = '+repr(result if result is not None else {'completed':True, 'final_response':json.dumps(GOOD)})+'\n'+FAKE)
    # The isolation shim must block this source's dotenv and external secret loading.
    (root / 'hermes_cli').mkdir()
    (root / 'hermes_cli/__init__.py').write_text('')
@@ -77,8 +79,13 @@ class AdapterTests(unittest.TestCase):
   p=self.run_adapter({'completed':True,'error':'PRIVATE','final_response':json.dumps(GOOD)})
   self.assertNotEqual(p.returncode,0)
   self.assertEqual(json.loads(p.stdout).get('error_code'),'MODEL_EXECUTION_FAILED')
- def test_unread_diff_fails(self):
-  self.assertNotEqual(self.run_adapter(read=False).returncode,0)
+ def test_inline_diff_does_not_require_redundant_tool_call(self):
+  p=self.run_adapter(read=False)
+  self.assertEqual(p.returncode,0,p.stdout)
+ def test_entire_diff_over_200_lines_is_supplied_without_pagination(self):
+  payload={'repository':'owner/repo','number':1,'head_sha':'a'*40,'base_sha':'b'*40,'title':'change','diff':LONG_DIFF}
+  p=self.run_adapter(payload=payload,read=False)
+  self.assertEqual(p.returncode,0,p.stdout)
  def test_malformed_output_fails(self):
   for value in ['not json', json.dumps({'complete':'true','summary':'x','findings':[]}), json.dumps({'complete':True,'findings':[]}), json.dumps(dict(GOOD,complete=False)),json.dumps(dict(GOOD,findings=[{'severity':'unknown'}]))]:
    with self.subTest(value=value): self.assertNotEqual(self.run_adapter({'completed':True,'final_response':value}).returncode,0)
@@ -164,6 +171,10 @@ class AdapterTests(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('TEST_HERMES_SOURCE'), 'set TEST_HERMES_SOURCE for installed Hermes integration')
 class InstalledHermesTests(unittest.TestCase):
  def test_real_agent_reads_diff_through_local_model_server(self):
+  self.exercise_real_agent(direct=False)
+ def test_real_agent_receives_full_diff_before_immediate_final_answer(self):
+  self.exercise_real_agent(direct=True)
+ def exercise_real_agent(self, direct):
   from http.server import HTTPServer, BaseHTTPRequestHandler
   import threading
   requests = []
@@ -176,7 +187,7 @@ class InstalledHermesTests(unittest.TestCase):
     if self.path == '/api/show':
      self.send_response(404); self.end_headers(); return
     requests.append(data)
-    used = any(m.get('role') == 'tool' for m in data.get('messages', []))
+    used = direct or any(m.get('role') == 'tool' for m in data.get('messages', []))
     if used:
      message = {'role': 'assistant', 'content': json.dumps(GOOD)}
     else:
@@ -190,19 +201,24 @@ class InstalledHermesTests(unittest.TestCase):
   thread.start()
   try:
    env = dict(os.environ, REVIEW_HERMES_PATH=os.environ['TEST_HERMES_SOURCE'], REVIEW_MODEL='test-model', REVIEW_BASE_URL='http://127.0.0.1:'+str(server.server_port)+'/v1', REVIEW_API_KEY='dummy-only', REVIEW_TIMEOUT_SECONDS='60')
-   payload = {'repository':'test/repo','number':1,'head_sha':'a'*40,'base_sha':'b'*40,'title':'synthetic fixture','diff':DIFF}
+   payload = {'repository':'test/repo','number':1,'head_sha':'a'*40,'base_sha':'b'*40,'title':'synthetic fixture','diff':LONG_DIFF}
    p = subprocess.run([sys.executable, '-I', str(SCRIPT)], input=json.dumps(payload), text=True, capture_output=True, env=env, timeout=75)
    self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
    self.assertTrue(json.loads(p.stdout)['complete'])
    self.assertEqual(p.stderr, '')
-   self.assertGreaterEqual(len(requests), 2)
+   self.assertGreaterEqual(len(requests), 1 if direct else 2)
+   first_user = next(m['content'] for m in requests[0]['messages'] if m.get('role') == 'user')
+   self.assertEqual(json.loads(first_user)['diff'],LONG_DIFF)
    for request in requests:
     response_format=request.get('response_format')
     self.assertEqual(response_format.get('type'),'json_schema')
     self.assertTrue(response_format['json_schema']['strict'])
     self.assertEqual([t['function']['name'] for t in request.get('tools', [])], ['read_diff'])
    evidence = [m['content'] for request in requests for m in request['messages'] if m.get('role') == 'tool']
-   self.assertTrue(any('+x = 2' in str(content) for content in evidence))
+   if direct:
+    self.assertEqual(evidence,[])
+   else:
+    self.assertTrue(any('+x = 2' in str(content) for content in evidence))
   finally:
    server.shutdown(); server.server_close(); thread.join()
 
