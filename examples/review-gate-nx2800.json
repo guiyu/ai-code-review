@@ -1,0 +1,47 @@
+{
+  "gitea_url": "http://120.26.178.131:3000",
+  "repository": "liangyou/halliday_nx2800",
+  "base_branch": "main",
+  "token_env": "GITEA_TOKEN",
+  "bot_username": "qianshou",
+  "allow_insecure_http": true,
+  "state_dir": "/var/lib/ai-code-review/nx2800",
+  "policy_version": "oasis-static-v11",
+  "block_threshold": "high",
+  "poll_seconds": 30,
+  "review_timeout_seconds": 1260,
+  "max_diff_bytes": 200000,
+  "reviewer_command": [
+    "/opt/hermes/venv/bin/python3",
+    "-I",
+    "/opt/ai-code-review/scripts/hermes_reviewer.py"
+  ],
+  "reviewer_env": {
+    "REVIEW_MODEL": "REVIEW_MODEL",
+    "REVIEW_BASE_URL": "REVIEW_BASE_URL",
+    "REVIEW_API_KEY": "REVIEW_API_KEY",
+    "REVIEW_HERMES_PATH": "REVIEW_HERMES_PATH",
+    "REVIEW_TIMEOUT_SECONDS": "REVIEW_TIMEOUT_SECONDS",
+    "REVIEW_MAX_TOKENS": "REVIEW_MAX_TOKENS",
+    "REVIEW_DIAGNOSTICS_DIR": "REVIEW_DIAGNOSTICS_DIR",
+    "REVIEW_THINKING_MODE": "REVIEW_THINKING_MODE",
+    "REVIEW_RECHECK_DIFF": "REVIEW_RECHECK_DIFF"
+  },
+  "identities": {},
+  "feishu_app_id_env": "FEISHU_APP_ID",
+  "feishu_app_secret_env": "FEISHU_APP_SECRET",
+  "notification_mode": "feishu_group",
+  "feishu_webhook_url_env": "FEISHU_WEBHOOK_URL",
+  "merge_whitelist_usernames": [
+    "leonard",
+    "zhangyupeng",
+    "wangkw",
+    "huichen",
+    "qingye",
+    "tom",
+    "zichuan",
+    "alvin",
+    "scorttin"
+  ],
+  "review_only": true
+}
