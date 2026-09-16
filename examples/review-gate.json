@@ -6,7 +6,7 @@
   "bot_username": "qianshou",
   "allow_insecure_http": true,
   "state_dir": "/var/lib/ai-code-review",
-  "policy_version": "oasis-static-v11",
+  "policy_version": "oasis-static-v12",
   "block_threshold": "high",
   "poll_seconds": 30,
   "review_timeout_seconds": 300,
@@ -28,5 +28,8 @@
   "feishu_app_id_env": "FEISHU_APP_ID",
   "feishu_app_secret_env": "FEISHU_APP_SECRET",
   "review_only": true,
-  "merge_whitelist_usernames": []
+  "merge_whitelist_usernames": [
+    "halliday"
+  ],
+  "allow_admin_merge_override": true
 }

@@ -3,6 +3,7 @@ package gate
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -573,5 +574,36 @@ func TestReviewOnlyCannotMerge(t *testing.T) {
 	cfg.MergeWhitelistUsernames = nil
 	if len(cfg.MergeUsers()) != 0 {
 		t.Fatal("bot was reintroduced")
+	}
+}
+
+func TestAdministratorMergeOverridePolicy(t *testing.T) {
+	for _, allow := range []bool{false, true} {
+		cfg := DefaultConfig()
+		// Decode configuration to also exercise the public JSON setting.
+		if err := json.Unmarshal([]byte(fmt.Sprintf(`{"allow_admin_merge_override":%t}`, allow)), &cfg); err != nil {
+			t.Fatal(err)
+		}
+		api := NewAPI(cfg, "")
+		p := api.ProtectionPlan(nil)
+		if p["block_admin_merge_override"] != !allow {
+			t.Fatalf("allow=%v: %v", allow, p)
+		}
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/branches/") {
+				json.NewEncoder(w).Encode(map[string]any{"protected": true, "effective_branch_protection_name": "main"})
+				return
+			}
+			json.NewEncoder(w).Encode(p)
+		}))
+		api.Config.GiteaURL = srv.URL
+		if err := api.AuditProtection(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		p["block_admin_merge_override"] = allow
+		if api.AuditProtection(context.Background()) == nil {
+			t.Fatal("unexpected admin override policy accepted")
+		}
+		srv.Close()
 	}
 }

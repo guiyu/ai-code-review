@@ -6,7 +6,7 @@
   "bot_username": "qianshou",
   "allow_insecure_http": true,
   "state_dir": "/var/lib/ai-code-review/nx2800",
-  "policy_version": "oasis-static-v11",
+  "policy_version": "oasis-static-v12",
   "block_threshold": "high",
   "poll_seconds": 30,
   "review_timeout_seconds": 1260,
@@ -33,15 +33,17 @@
   "notification_mode": "feishu_group",
   "feishu_webhook_url_env": "FEISHU_WEBHOOK_URL_NX2800",
   "merge_whitelist_usernames": [
-    "leonard",
-    "zhangyupeng",
-    "wangkw",
-    "huichen",
-    "qingye",
-    "tom",
-    "zichuan",
     "alvin",
-    "scorttin"
+    "halliday",
+    "huichen",
+    "leonard",
+    "qingye",
+    "scorttin",
+    "tom",
+    "wangkw",
+    "zhangyupeng",
+    "zichuan"
   ],
-  "review_only": true
+  "review_only": true,
+  "allow_admin_merge_override": true
 }

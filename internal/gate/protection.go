@@ -76,7 +76,7 @@ func (a *API) ProtectionPlan(existing map[string]any) map[string]any {
 	p["merge_whitelist_teams"] = []string{}
 	p["enable_status_check"] = true
 	p["block_on_outdated_branch"] = true
-	p["block_admin_merge_override"] = true
+	p["block_admin_merge_override"] = !a.Config.AllowAdminMergeOverride
 	p["unprotected_file_patterns"] = ""
 	checks := stringsOf(p["status_check_contexts"])
 	if !contains(checks, StatusContext) {
@@ -100,10 +100,13 @@ func (a *API) AuditProtection(ctx context.Context) error {
 	if e != nil {
 		return e
 	}
-	for _, k := range []string{"enable_merge_whitelist", "enable_status_check", "block_on_outdated_branch", "block_admin_merge_override", "dismiss_stale_approvals"} {
+	for _, k := range []string{"enable_merge_whitelist", "enable_status_check", "block_on_outdated_branch", "dismiss_stale_approvals"} {
 		if p[k] != true {
 			return fmt.Errorf("protection missing %s", k)
 		}
+	}
+	if p["block_admin_merge_override"] != !a.Config.AllowAdminMergeOverride {
+		return errors.New("administrator merge override differs from configured policy")
 	}
 	if p["enable_push"] != false || p["enable_force_push"] != false || p["enable_force_push_allowlist"] != false {
 		return errors.New("direct or force push remains enabled")

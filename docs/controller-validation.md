@@ -41,3 +41,9 @@ The subprocess receives only bounded JSON stdin plus an explicit HOME/HERMES_HOM
 ### Final review regressions
 
 Added tests first and observed both failures: a cleared shared-head conflict left the final status at `error`, and a failed pull-list request skipped pending Feishu delivery. The fixes persist a publication-invalid flag before writing ambiguity errors (without discarding the review), restore the result status when the conflict clears, and drain the scoped durable outbox even when listing PRs fails. `go test ./internal/gate -count=1` and `go vet ./internal/gate ./cmd/review-gate` passed after the fixes.
+
+## 管理员人工合入覆盖（2026-09-16）
+
+新增 `allow_admin_merge_override` 配置，默认 `false`，保持现有强制门禁。设置为 `true` 时，保护计划写入 `block_admin_merge_override=false`，保护审计按配置核对该值。Gitea 的此项设置作用于仓库管理员整体，并非单独针对某个账号；合并白名单仍独立生效。`review_only` 服务仍拒绝执行合并，评审失败状态不会被改写为成功，禁止直接推送和强推的规则保持不变。
+
+回归测试已先复现配置未生效，再验证开启、关闭及线上策略偏离的检查。Go gate/feishu 测试、go vet 通过，Darwin arm64 二进制构建成功。用户明确确认后已应用于三个部署仓库：qianshou/Gitea_code_review 的 main、qingyun/oasis_glasses 的 dev_oasis、liangyou/halliday_nx2800 的 main。线上读回确认 halliday 在合并白名单、block_admin_merge_override=false，其他保护项不变。Gitea 要求显式协作者关系才能保存新白名单，因此对测试仓库和 NX2800 增加 halliday 的 write 协作者关系，没有授予新的 admin 权限。三个服务均已部署新二进制、通过 preflight 并重启成功；没有执行任何 PR 合并。
