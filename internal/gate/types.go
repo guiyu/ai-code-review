@@ -46,7 +46,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{FeishuWebhookKeywordEnv: "FEISHU_WEBHOOK_KEYWORD", FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-static-v12", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
+	return Config{FeishuWebhookKeywordEnv: "FEISHU_WEBHOOK_KEYWORD", FeishuWebhookURLEnv: "FEISHU_WEBHOOK_URL", NotificationMode: "feishu_dm", GiteaURL: "http://120.26.178.131:3000", Repository: "qianshou/Gitea_code_review", BaseBranch: "main", TokenEnv: "GITEA_TOKEN", StateDir: ".review-gate-state", PolicyVersion: "oasis-static-v13", BlockThreshold: "high", FeishuAppIDEnv: "FEISHU_APP_ID", FeishuAppSecretEnv: "FEISHU_APP_SECRET", PollSeconds: 30, ReviewTimeoutSeconds: 300, MaxDiffBytes: 200000}
 }
 func LoadConfig(path string) (Config, error) {
 	c := DefaultConfig()
@@ -73,6 +73,8 @@ func LoadConfig(path string) (Config, error) {
 }
 
 type User struct {
+	IsBot bool   `json:"is_bot,omitempty"`
+	Type  string `json:"type,omitempty"`
 	ID    int64  `json:"id"`
 	Login string `json:"login"`
 }
@@ -94,21 +96,24 @@ type PR struct {
 	MergeBase string `json:"merge_base"`
 }
 type ReviewCommit struct {
+	Author  string `json:"-"` // notification-only metadata, not model input
 	SHA     string `json:"sha"`
 	Message string `json:"message"`
 }
 type ReviewInput struct {
-	Description string         `json:"description"`
-	HeadRef     string         `json:"head_ref"`
-	BaseRef     string         `json:"base_ref"`
-	MergeBase   string         `json:"merge_base"`
-	Commits     []ReviewCommit `json:"commits"`
-	Repository  string         `json:"repository"`
-	Number      int            `json:"number"`
-	HeadSHA     string         `json:"head_sha"`
-	BaseSHA     string         `json:"base_sha"`
-	Diff        string         `json:"diff"`
-	Title       string         `json:"title"`
+	Feedback       []ReviewFeedback `json:"feedback,omitempty"`
+	PreviousReview string           `json:"previous_review,omitempty"`
+	Description    string           `json:"description"`
+	HeadRef        string           `json:"head_ref"`
+	BaseRef        string           `json:"base_ref"`
+	MergeBase      string           `json:"merge_base"`
+	Commits        []ReviewCommit   `json:"commits"`
+	Repository     string           `json:"repository"`
+	Number         int              `json:"number"`
+	HeadSHA        string           `json:"head_sha"`
+	BaseSHA        string           `json:"base_sha"`
+	Diff           string           `json:"diff"`
+	Title          string           `json:"title"`
 }
 type Finding struct {
 	Severity   string `json:"severity"`

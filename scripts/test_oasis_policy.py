@@ -63,6 +63,14 @@ class OasisPolicyTests(unittest.TestCase):
              description='',head_ref='fix/audio',base_ref='main',merge_base='c'*40,
              commits=[{'sha':'a'*40,'message':'fix: release audio focus after SCO disconnect'}])
   adapter.validate_input(value)
+ def test_feedback_input_accepted_and_bounded(self):
+  value=dict(repository='owner/repo',number=1,head_sha='a'*40,base_sha='b'*40,title='修复',diff=DIFF,
+             previous_review='旧评审报告',feedback=[dict(id=3333,author='huichen',body='已有清理路径',updated_at='2026-09-16T16:47:45+08:00')])
+  adapter.validate_input(value)
+  for invalid in [None, [{'id':1}], [dict(id=1,author='dev',body='x'*32001,updated_at='')]]:
+   with self.subTest(invalid=type(invalid)):
+    with self.assertRaises(adapter.ReviewError): adapter.validate_input(dict(value,feedback=invalid))
+
  def test_bad_commit_sha_rejected(self):
   value=dict(repository='owner/repo',number=1,head_sha='a'*40,base_sha='b'*40,title='修复',diff=DIFF,commits=[{'sha':'bad','message':'fix'}])
   with self.assertRaises(adapter.ReviewError):adapter.validate_input(value)

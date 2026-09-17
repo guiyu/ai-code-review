@@ -9,6 +9,9 @@ import (
 )
 
 type Run struct {
+	CodeAuthors        []string
+	Discussion         Discussion
+	Superseded         bool
 	PublicationInvalid bool
 	Scope              string
 	Attempts           int

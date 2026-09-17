@@ -210,8 +210,13 @@ func (c *Controller) Merge(ctx context.Context, n int, expectedHead string) erro
 			return errors.New("head shared by another open PR")
 		}
 	}
-	r := c.Store.Runs[c.Config.Key(p)]
-	if r == nil || r.Result == nil || !r.Result.Passes(c.Config.BlockThreshold) || r.Status != "success" || r.ReportID <= 0 {
+	discussion, e := c.discussion(ctx, p)
+	if e != nil {
+		return e
+	}
+	key := discussion.key(c.Config.Key(p))
+	r := c.Store.Runs[key]
+	if r == nil || r.Superseded || r.Result == nil || !r.Result.Passes(c.Config.BlockThreshold) || r.Status != "success" || r.ReportID <= 0 {
 		return errors.New("no trusted complete passing review for current PR/head/base/policy")
 	}
 	data, _ := json.Marshal(r.Result)
@@ -253,7 +258,7 @@ func (c *Controller) Merge(ctx context.Context, n int, expectedHead string) erro
 	if !found {
 		return errors.New("required success status absent")
 	}
-	if e = c.API.Current(ctx, p); e != nil {
+	if e = c.currentDiscussion(ctx, p, key); e != nil {
 		return e
 	}
 	if !strings.EqualFold(expectedHead, p.Head.SHA) {

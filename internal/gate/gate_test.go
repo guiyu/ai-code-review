@@ -192,6 +192,8 @@ func TestStaleDuringDiffNeverReviews(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := PR{Number: 1, State: "open", Head: Ref{SHA: head}, Base: Ref{Ref: "main", SHA: base}}
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/comments"):
+			w.Write([]byte(`[]`))
 		case strings.HasSuffix(r.URL.Path, "/pulls"):
 			json.NewEncoder(w).Encode([]PR{p})
 		case strings.HasSuffix(r.URL.Path, "/pulls/1/commits"):
@@ -341,8 +343,11 @@ func TestMergeTrustedCurrentReview(t *testing.T) {
 	var run *Run
 	merged := false
 	tamper := false
+	discussionComments := []Comment{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/comments"):
+			json.NewEncoder(w).Encode(discussionComments)
 		case r.URL.Path == "/api/v1/user":
 			json.NewEncoder(w).Encode(User{ID: 1, Login: "bot"})
 		case strings.Contains(r.URL.Path, "/branch_protections/"):
@@ -387,6 +392,11 @@ func TestMergeTrustedCurrentReview(t *testing.T) {
 		t.Fatal("merge absent")
 	}
 	merged = false
+	discussionComments = []Comment{{ID: 7, Body: run.ReportBody, User: User{Login: "bot"}}, {ID: 8, Body: "新增反证", User: User{Login: "dev"}}}
+	if c.Merge(context.Background(), 1, p.Head.SHA) == nil || merged {
+		t.Fatal("unreviewed feedback allowed merge")
+	}
+	discussionComments = []Comment{}
 	tamper = true
 	if c.Merge(context.Background(), 1, p.Head.SHA) == nil || merged {
 		t.Fatal("tampered report accepted")
@@ -422,6 +432,10 @@ func TestAutomaticReviewerRetryAndCommentRecovery(t *testing.T) {
 				return
 			}
 			run := c.Store.Runs[c.Config.Key(p)]
+			if run == nil || run.ReportBody == "" {
+				w.Write([]byte(`[]`))
+				return
+			}
 			json.NewEncoder(w).Encode([]Comment{{ID: 7, Body: run.ReportBody, HTMLURL: "http://report", User: User{Login: "bot"}}})
 		default:
 			t.Error(r.URL.Path)

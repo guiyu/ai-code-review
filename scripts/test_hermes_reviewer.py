@@ -73,6 +73,16 @@ class AdapterTests(unittest.TestCase):
  def test_success_isolated_exact_json(self):
   p=self.run_adapter(); self.assertEqual(p.returncode,0,p.stderr)
   data=json.loads(p.stdout); self.assertTrue(data['complete']); self.assertIn('证据范围', data['summary']); self.assertEqual(p.stderr,'')
+ def test_feedback_and_previous_report_reach_model(self):
+  payload={'repository':'owner/repo','number':1,'head_sha':'a'*40,'base_sha':'b'*40,'title':'change','diff':DIFF,
+           'previous_review':'原报告', 'feedback':[{'id':9,'author':'dev','body':'已有清除路径','updated_at':''}]}
+  global FAKE
+  original=FAKE
+  try:
+   FAKE=FAKE.replace("assert json.loads(kw['user_message'])['diff'] == EXPECTED_DIFF", "assert json.loads(kw['user_message'])['diff'] == EXPECTED_DIFF\n  assert json.loads(kw['user_message'])['feedback'][0]['body'] == '已有清除路径'\n  assert json.loads(kw['user_message'])['previous_review'] == '原报告'")
+   p=self.run_adapter(payload=payload)
+   self.assertEqual(p.returncode,0,p.stdout)
+  finally: FAKE=original
  def test_incomplete_agent_fails(self):
   p=self.run_adapter({'completed':False,'final_response':json.dumps(GOOD)}); self.assertNotEqual(p.returncode,0); self.assertFalse(json.loads(p.stdout)['complete'])
  def test_agent_error_fails_even_with_complete(self):

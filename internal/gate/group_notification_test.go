@@ -83,12 +83,15 @@ func TestFailedGroupCanSwitchToDM(t *testing.T) {
 	}
 }
 
-func TestNotificationIncludesPRAuthorBeforeLongReport(t *testing.T) {
+func TestNotificationIncludesCodeAuthorsBeforeLongReport(t *testing.T) {
 	c := &Controller{Config: DefaultConfig()}
-	r := &Run{PR: PR{Number: 3, User: User{ID: 37, Login: "qianshou"}}, Status: "success", Result: &Result{Summary: strings.Repeat("评审正文", 4000)}, ReportURL: "https://gitea.example/report"}
+	r := &Run{PR: PR{Number: 3, User: User{ID: 37, Login: "qianshou"}}, CodeAuthors: []string{"chenhui", "liangyou", "chenhui"}, Status: "success", Result: &Result{Summary: strings.Repeat("评审正文", 4000)}, ReportURL: "https://gitea.example/report"}
 	body := c.notification(r)
-	if !strings.Contains(body, "PR 提交人：qianshou（Gitea ID：37）") {
-		t.Fatal("missing PR author")
+	if !strings.Contains(body, "代码提交人：chenhui、liangyou") {
+		t.Fatal("missing code authors")
+	}
+	if strings.Contains(body, "代码提交人：qianshou") || strings.Contains(body, "PR 提交人") {
+		t.Fatal("PR opener shown as code author")
 	}
 	if !strings.HasSuffix(body, r.ReportURL) {
 		t.Fatal("report link lost")
@@ -97,7 +100,20 @@ func TestNotificationIncludesPRAuthorBeforeLongReport(t *testing.T) {
 func TestNotificationMissingAuthorDoesNotInventIdentity(t *testing.T) {
 	c := &Controller{Config: DefaultConfig()}
 	body := c.notification(&Run{PR: PR{User: User{ID: 37}}})
-	if !strings.Contains(body, "PR 提交人：未提供用户名（Gitea ID：37）") {
+	if !strings.Contains(body, "代码提交人：未提供作者信息") {
 		t.Fatal("missing explicit author fallback")
 	}
 }
+
+func TestCommitAuthorsPersistWithReview(t *testing.T) {
+	h := newFeedbackHarness(t)
+	h.once(t)
+	r := h.c.Store.Runs[h.c.Config.Key(h.pr)]
+	if len(r.CodeAuthors) != 1 || r.CodeAuthors[0] != "code-author" {
+		t.Fatal("commit author not persisted", r.CodeAuthors)
+	}
+	if strings.Contains(captureAuthorInput(h.rv.inputs[0]), "code-author") {
+		t.Fatal("notification metadata leaked into model schema")
+	}
+}
+func captureAuthorInput(in ReviewInput) string { b, _ := json.Marshal(in); return string(b) }

@@ -113,10 +113,11 @@ func (a *API) Current(ctx context.Context, p PR) error {
 }
 
 type Comment struct {
-	ID      int64  `json:"id"`
-	HTMLURL string `json:"html_url"`
-	Body    string `json:"body"`
-	User    User   `json:"user"`
+	UpdatedAt string `json:"updated_at"`
+	ID        int64  `json:"id"`
+	HTMLURL   string `json:"html_url"`
+	Body      string `json:"body"`
+	User      User   `json:"user"`
 }
 
 func (a *API) Status(ctx context.Context, p PR, state, target, key string) error {
@@ -133,6 +134,9 @@ func (a *API) PullCommits(ctx context.Context, n int) ([]ReviewCommit, error) {
 			SHA    string `json:"sha"`
 			Commit struct {
 				Message string `json:"message"`
+				Author  struct {
+					Name string `json:"name"`
+				} `json:"author"`
 			} `json:"commit"`
 		}
 		if e := a.JSON(ctx, "GET", fmt.Sprintf("%s/pulls/%d/commits?limit=50&page=%d", a.repo(), n, page), nil, &batch); e != nil {
@@ -150,7 +154,7 @@ func (a *API) PullCommits(ctx context.Context, n int) ([]ReviewCommit, error) {
 			if totalBytes > 200000 || len(all) >= 1000 {
 				return nil, errors.New("PR commit history exceeds review limit")
 			}
-			all = append(all, ReviewCommit{SHA: item.SHA, Message: item.Commit.Message})
+			all = append(all, ReviewCommit{SHA: item.SHA, Message: item.Commit.Message, Author: item.Commit.Author.Name})
 		}
 		if len(batch) == 0 {
 			if len(all) == 0 {

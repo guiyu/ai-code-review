@@ -181,7 +181,7 @@ def parse_diff(diff):
 
 def validate_input(value):
     required = {'repository', 'number', 'head_sha', 'base_sha', 'diff', 'title'}
-    optional = {'description', 'head_ref', 'base_ref', 'merge_base', 'commits'}
+    optional = {'description', 'head_ref', 'base_ref', 'merge_base', 'commits', 'feedback', 'previous_review'}
     if not isinstance(value, dict) or not required <= set(value) or set(value) - required - optional:
         raise ReviewError('invalid input object')
     if type(value['number']) is not int or value['number'] <= 0:
@@ -206,6 +206,27 @@ def validate_input(value):
             raise ReviewError('invalid commit SHA')
         if not isinstance(commit['message'], str) or not commit['message'].strip() or len(commit['message']) > 16000:
             raise ReviewError('invalid commit message')
+    previous = value.get('previous_review', '')
+    feedback = value.get('feedback', [])
+    if not isinstance(previous, str) or len(previous.encode('utf-8')) > 64000:
+        raise ReviewError('invalid previous review')
+    if not isinstance(feedback, list) or len(feedback) > 100:
+        raise ReviewError('invalid feedback')
+    seen, total = set(), 0
+    for item in feedback:
+        if not isinstance(item, dict) or set(item) != {'id', 'author', 'body', 'updated_at'}:
+            raise ReviewError('invalid feedback')
+        if type(item['id']) is not int or item['id'] <= 0 or item['id'] in seen:
+            raise ReviewError('invalid feedback ID')
+        seen.add(item['id'])
+        if any(not isinstance(item[k], str) for k in ('author', 'body', 'updated_at')):
+            raise ReviewError('invalid feedback text')
+        size = len(item['body'].encode('utf-8'))
+        total += size
+        if not item['body'].strip() or size > 32000 or total > 64000 or len(item['author']) > 256 or len(item['updated_at']) > 64:
+            raise ReviewError('feedback exceeds review limit')
+    if feedback and not previous.strip():
+        raise ReviewError('feedback missing previous review')
     return parse_diff(value['diff'])
 
 

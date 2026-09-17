@@ -56,3 +56,7 @@ HTTP 400/401 authentication responses are parsed within the same response-size l
 通知在评审正文前显示 `PR 提交人：用户名（Gitea ID：数字）`，使用 Gitea PR API 的 `user.login` / `user.id`。身份缺失时明确显示缺失，长报告截断后仍保留此信息。这代表 PR 发起人；轮询不能将其认定为每次 push 的实际操作者。
 
 替换私有环境中的 `FEISHU_WEBHOOK_URL` 并重启各实例即可切换机器人。已确认发送成功的历史报告不会因换群而自动重发；未发送成功的队列项将发送至新目标。
+
+## 代码提交人（2026-09-17）
+
+群通知使用评审所覆盖提交的 Git `commit.author.name`，显示为“代码提交人”，多人去重汇总；不再把 PR 创建者或其 Gitea ID 当作代码作者。作者快照随评审结果持久保存，通知重试不读取可能已经变化的 PR。作者数据只用于通知，不扩展模型输入协议。旧结果没有作者快照或提交缺少作者名时明确显示“未提供作者信息”，不回退为 PR 创建者。已发送通知不重发。

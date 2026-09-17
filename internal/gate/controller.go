@@ -61,7 +61,7 @@ func (c *Controller) Once(ctx context.Context) error {
 func (c *Controller) drainOutbox(ctx context.Context) error {
 	var errs []error
 	for _, r := range c.Store.Runs {
-		if r.Scope == c.scope() && r.ReportID != 0 && r.Status != "" && !r.Notified {
+		if !r.Superseded && !r.PublicationInvalid && r.Scope == c.scope() && r.ReportID != 0 && r.Status != "" && !r.Notified {
 			if e := c.notify(ctx, r); e != nil {
 				errs = append(errs, e)
 			}
@@ -76,14 +76,21 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 	if e := c.API.Current(ctx, p); e != nil {
 		return e
 	}
-	key := c.Config.Key(p)
+	discussion, e := c.discussion(ctx, p)
+	if e != nil {
+		return errors.Join(e, c.invalidateDiscussion(ctx, p, "error", c.Config.Key(p)))
+	}
+	key := discussion.key(c.Config.Key(p))
 	r := c.Store.Runs[key]
 	if r == nil {
-		r = &Run{Key: key, PR: p, Scope: c.scope()}
+		r = &Run{Key: key, PR: p, Scope: c.scope(), Discussion: discussion}
 		c.Store.Runs[key] = r
 		if e := c.Store.Save(); e != nil {
 			return e
 		}
+	}
+	if e := c.activate(r); e != nil {
+		return e
 	}
 	if r.Result == nil && r.ReviewError != "" && r.Attempts < 3 {
 		if time.Now().Unix() < r.NextAttemptUnix {
@@ -106,8 +113,10 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 		if e != nil {
 			return e
 		}
+		r.CodeAuthors = nil
 		foundHead := false
 		for _, commit := range commits {
+			r.CodeAuthors = append(r.CodeAuthors, commit.Author)
 			if commit.SHA == p.Head.SHA {
 				foundHead = true
 			}
@@ -122,7 +131,7 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 		if e := c.Store.Save(); e != nil {
 			return e
 		}
-		res, e := c.Reviewer.Review(ctx, ReviewInput{Repository: c.Config.Repository, Number: p.Number, HeadSHA: p.Head.SHA, BaseSHA: p.Base.SHA, Diff: diff, Title: p.Title, Description: p.Body, HeadRef: p.Head.Ref, BaseRef: p.Base.Ref, MergeBase: p.MergeBase, Commits: commits})
+		res, e := c.Reviewer.Review(ctx, ReviewInput{Feedback: r.Discussion.Feedback, PreviousReview: r.Discussion.PreviousReview, Repository: c.Config.Repository, Number: p.Number, HeadSHA: p.Head.SHA, BaseSHA: p.Base.SHA, Diff: diff, Title: p.Title, Description: p.Body, HeadRef: p.Head.Ref, BaseRef: p.Base.Ref, MergeBase: p.MergeBase, Commits: commits})
 		if e == nil {
 			data, _ := json.Marshal(res)
 			res, e = DecodeResult(data)
@@ -140,7 +149,7 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 	if r.Result == nil && r.ReviewError != "" && r.Attempts < 3 {
 		return fmt.Errorf("%s；已安排重试", r.ReviewError)
 	}
-	if e := c.API.Current(ctx, p); e != nil {
+	if e := c.currentDiscussion(ctx, p, key); e != nil {
 		return e
 	}
 	if r.ReportBody == "" {
@@ -178,7 +187,7 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 			state = "success"
 		}
 	}
-	if e := c.API.Current(ctx, p); e != nil {
+	if e := c.currentDiscussion(ctx, p, key); e != nil {
 		return e
 	}
 	if r.Status != state || r.PublicationInvalid {
@@ -195,6 +204,13 @@ func (c *Controller) process(ctx context.Context, p PR) error {
 }
 func (c *Controller) report(r *Run) string {
 	body := fmt.Sprintf("<!-- hermes-review:%s -->\n## 自动代码评审\nPR #%d · 提交 `%s` · 目标分支提交 `%s` · 策略 `%s`\n\n", r.Key, r.PR.Number, r.PR.Head.SHA, r.PR.Base.SHA, c.Config.PolicyVersion)
+	if len(r.Discussion.Feedback) > 0 {
+		body += "评论反馈复评；参考评论："
+		for _, feedback := range r.Discussion.Feedback {
+			body += fmt.Sprintf("[#%d](%s/%s/pulls/%d#issuecomment-%d) ", feedback.ID, strings.TrimRight(c.Config.GiteaURL, "/"), c.Config.Repository, r.PR.Number, feedback.ID)
+		}
+		body += "\n\n"
+	}
 	if r.Result == nil {
 		return body + r.ReviewError
 	}
@@ -256,7 +272,11 @@ func (c *Controller) Retry(ctx context.Context, n int) error {
 	if e != nil {
 		return e
 	}
-	key := c.Config.Key(p)
+	discussion, e := c.discussion(ctx, p)
+	if e != nil {
+		return e
+	}
+	key := discussion.key(c.Config.Key(p))
 	r := c.Store.Runs[key]
 	if r == nil || r.ReviewError == "" || r.Result != nil {
 		return errors.New("no failed execution to retry")
@@ -282,12 +302,22 @@ func (c *Controller) findReport(ctx context.Context, r *Run) (Comment, error) {
 	return Comment{}, errors.New("comment pagination limit")
 }
 func (c *Controller) notification(r *Run) string {
-	author := r.PR.User.Login
-	if author == "" {
-		author = "未提供用户名"
+	authors := []string{}
+	for _, name := range r.CodeAuthors {
+		name = strings.Join(strings.Fields(name), " ")
+		if name == "" {
+			name = "未提供作者信息"
+		}
+		if !contains(authors, name) {
+			authors = append(authors, name)
+		}
 	}
+	if len(authors) == 0 {
+		authors = []string{"未提供作者信息"}
+	}
+	authorText := strings.Join(authors, "、")
 	body := fmt.Sprintf("Oasis 代码评审 %s #%d：%s\n评审提交 %s，目标分支提交 %s；本报告仅适用于此版本组合。\n", c.Config.Repository, r.PR.Number, r.Status, r.PR.Head.SHA, r.PR.Base.SHA)
-	body += fmt.Sprintf("PR 提交人：%s（Gitea ID：%d）\n", author, r.PR.User.ID)
+	body += "代码提交人：" + authorText + "\n"
 	if r.Result != nil {
 		body += r.Result.Summary + "\n"
 		counts := map[string]int{}
